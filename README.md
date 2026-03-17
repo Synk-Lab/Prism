@@ -1,6 +1,6 @@
 # Prism
 
-**The complete Soroban transaction debugger — from cryptic error to root cause in one command.**
+** Soroban transaction debugger — from cryptic error to root cause in one command.**
 
 Prism turns opaque Soroban errors into plain English, replays historical transactions against reconstructed ledger state, and lets you step through contract execution with full time-travel debugging. It handles everything from decoding `Error(Contract, #3)` into the actual enum name defined in the contract, to showing you exactly which host function call consumed the last byte of your CPU budget.
 
@@ -8,7 +8,7 @@ If a Soroban transaction failed and you need to know why, Sextant is the tool.
 
 ---
 
-## Why Sextant Exists
+## Why Prism Exists
 
 Soroban errors are notoriously opaque. `HostError(Budget, LimitExceeded)` tells you the budget was exceeded but not which call was expensive. `Error(Contract, #3)` tells you the contract returned error number three but not what three means. `Error(Storage, InternalError)` tells you almost nothing at all.
 
