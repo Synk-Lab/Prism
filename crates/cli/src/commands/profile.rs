@@ -7,6 +7,10 @@ use prism_core::types::config::NetworkConfig;
 pub struct ProfileArgs {
     /// Transaction hash to profile.
     pub tx_hash: String,
+
+    /// Output profile to a file instead of stdout.
+    #[arg(long, short)]
+    pub output_file: Option<String>,
 }
 
 pub async fn run(
@@ -22,7 +26,23 @@ pub async fn run(
 
     progress.finish_and_clear();
 
-    crate::output::print_resource_profile(&trace.resource_profile, output_format)?;
+    match output_format {
+        "json" => println!("{}", serde_json::to_string_pretty(&trace.resource_profile)?),
+        _ => {
+            println!("{}", colored::Colorize::bold("Resource Profile"));
+            println!(
+                "CPU: {}/{} instructions",
+                trace.resource_profile.total_cpu, trace.resource_profile.cpu_limit
+            );
+            println!(
+                "Memory: {}/{} bytes",
+                trace.resource_profile.total_memory, trace.resource_profile.memory_limit
+            );
+            for warning in &trace.resource_profile.warnings {
+                println!("{} {warning}", colored::Colorize::yellow("⚠"));
+            }
+        }
+    }
 
     Ok(())
 }

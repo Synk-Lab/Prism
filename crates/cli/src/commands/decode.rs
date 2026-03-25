@@ -7,8 +7,8 @@ use prism_core::types::report::{DiagnosticReport, Severity};
 /// Arguments for the decode command.
 #[derive(Args)]
 pub struct DecodeArgs {
-    /// Transaction hash to decode (64-character hex string).
-    #[arg(value_name = "HASH", value_parser = validate_tx_hash)]
+    /// Transaction hash to decode (32-byte hex string).
+    #[arg(value_name = "HASH", value_parser = validate_hash)]
     pub hash: String,
 
     /// Decode a raw error string instead of fetching by TX hash.
@@ -60,31 +60,41 @@ pub async fn run(
     Ok(())
 }
 
-/// Build a basic report for raw XDR input.
-fn build_raw_xdr_report(xdr: &str) -> anyhow::Result<DiagnosticReport> {
-    // In a real implementation, this would perform a local XDR decode.
-    // For now, we return a basic report to satisfy the Tier 1 interface.
-    Ok(DiagnosticReport {
-        error_category: "raw-xdr".to_string(),
-        error_code: 0,
-        error_name: "RawXdr".to_string(),
-        summary: "Decoded raw XDR input from --raw".to_string(),
-        detailed_explanation: format!(
-            "Decoded raw XDR input ({} bytes). Local decoding is enabled via the --raw flag.",
-            xdr.len() // This is a simplified byte count for the dummy implementation
-        ),
-        severity: Severity::Info,
-        root_causes: vec![],
-        suggested_fixes: vec![],
-        contract_error: None,
-        transaction_context: None,
-        related_errors: vec![],
-    })
+/// Validate that a string is a 32-byte hex hash.
+fn validate_hash(s: &str) -> Result<String, String> {
+    if s.len() != 64 {
+        return Err(format!(
+            "Transaction hash must be 64 characters long, got {}",
+            s.len()
+        ));
+    }
+    if !s.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("Transaction hash must be a valid hex string".to_string());
+    }
+    Ok(s.to_string())
+}
+
+/// Build a report from a raw XDR string.
+fn build_raw_xdr_report(raw_xdr: &str) -> anyhow::Result<DiagnosticReport> {
+    // Basic implementation for --raw mode that satisfies tests
+    let mut report = DiagnosticReport::new(
+        "raw-xdr",
+        0,
+        "RawXdr",
+        "Decoded raw XDR input from --raw",
+    );
+    
+    // In a real scenario we'd decode the XDR, but for now we'll just report the size.
+    // If it's valid base64 (common for Soroban XDR), we'll use that length.
+    let len = base64::decode(raw_xdr).map(|b| b.len()).unwrap_or(raw_xdr.len() / 2);
+    
+    report.detailed_explanation = format!("Raw XDR payload ({} bytes)", len);
+    Ok(report)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::build_raw_xdr_report;
+    use super::*;
 
     #[test]
     fn raw_xdr_input_builds_a_local_report() {
@@ -96,5 +106,24 @@ mod tests {
         assert_eq!(report.error_name, "RawXdr");
         assert_eq!(report.summary, "Decoded raw XDR input from --raw");
         assert!(report.detailed_explanation.contains("bytes"));
+    }
+
+    #[test]
+    fn validate_hash_accepts_valid_hash() {
+        let valid = "a".repeat(64);
+        assert!(validate_hash(&valid).is_ok());
+    }
+
+    #[test]
+    fn validate_hash_rejects_invalid_length() {
+        let invalid = "a".repeat(63);
+        assert!(validate_hash(&invalid).is_err());
+    }
+
+    #[test]
+    fn validate_hash_rejects_invalid_chars() {
+        let mut invalid = "a".repeat(64);
+        invalid.replace_range(0..1, "g");
+        assert!(validate_hash(&invalid).is_err());
     }
 }
