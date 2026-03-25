@@ -3,20 +3,15 @@
 use serde::{Deserialize, Serialize};
 
 /// Supported Stellar networks.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     Mainnet,
+    #[default]
     Testnet,
     Futurenet,
     Standalone,
     Custom,
-}
-
-impl Default for Network {
-    fn default() -> Self {
-        Self::Testnet
-    }
 }
 
 /// Configuration for connecting to a Stellar network.
@@ -52,7 +47,7 @@ impl NetworkConfig {
             rpc_url: "https://soroban-mainnet.stellar.org".to_string(),
             network_passphrase: "Public Global Stellar Network ; September 2015".to_string(),
             archive_urls: vec![
-                "https://history.stellar.org/prd/core-live/core_live_001".to_string(),
+                "https://history.stellar.org/prd/core-live/core_live_001".to_string()
             ],
         }
     }
@@ -63,9 +58,7 @@ impl NetworkConfig {
             network: Network::Futurenet,
             rpc_url: "https://rpc-futurenet.stellar.org".to_string(),
             network_passphrase: "Test SDF Future Network ; October 2022".to_string(),
-            archive_urls: vec![
-                "https://history-futurenet.stellar.org".to_string(),
-            ],
+            archive_urls: vec!["https://history-futurenet.stellar.org".to_string()],
         }
     }
 

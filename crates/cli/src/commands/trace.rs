@@ -6,6 +6,7 @@ use prism_core::types::config::NetworkConfig;
 #[derive(Args)]
 pub struct TraceArgs {
     /// Transaction hash to trace.
+    #[arg(index = 1, value_name = "TX_HASH")]
     pub tx_hash: String,
 
     /// Output trace to a file instead of stdout.
@@ -13,7 +14,11 @@ pub struct TraceArgs {
     pub output_file: Option<String>,
 }
 
-pub async fn run(args: TraceArgs, network: &NetworkConfig, output_format: &str) -> anyhow::Result<()> {
+pub async fn run(
+    args: TraceArgs,
+    network: &NetworkConfig,
+    output_format: &str,
+) -> anyhow::Result<()> {
     let progress = indicatif::ProgressBar::new_spinner();
     progress.set_message("Reconstructing state and replaying transaction...");
     progress.enable_steady_tick(std::time::Duration::from_millis(100));

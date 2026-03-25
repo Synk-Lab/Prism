@@ -9,7 +9,11 @@ pub struct ProfileArgs {
     pub tx_hash: String,
 }
 
-pub async fn run(args: ProfileArgs, network: &NetworkConfig, output_format: &str) -> anyhow::Result<()> {
+pub async fn run(
+    args: ProfileArgs,
+    network: &NetworkConfig,
+    output_format: &str,
+) -> anyhow::Result<()> {
     let progress = indicatif::ProgressBar::new_spinner();
     progress.set_message("Replaying transaction for resource profiling...");
     progress.enable_steady_tick(std::time::Duration::from_millis(100));
@@ -22,8 +26,14 @@ pub async fn run(args: ProfileArgs, network: &NetworkConfig, output_format: &str
         "json" => println!("{}", serde_json::to_string_pretty(&trace.resource_profile)?),
         _ => {
             println!("{}", colored::Colorize::bold("Resource Profile"));
-            println!("CPU: {}/{} instructions", trace.resource_profile.total_cpu, trace.resource_profile.cpu_limit);
-            println!("Memory: {}/{} bytes", trace.resource_profile.total_memory, trace.resource_profile.memory_limit);
+            println!(
+                "CPU: {}/{} instructions",
+                trace.resource_profile.total_cpu, trace.resource_profile.cpu_limit
+            );
+            println!(
+                "Memory: {}/{} bytes",
+                trace.resource_profile.total_memory, trace.resource_profile.memory_limit
+            );
             for warning in &trace.resource_profile.warnings {
                 println!("{} {warning}", colored::Colorize::yellow("⚠"));
             }

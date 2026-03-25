@@ -5,7 +5,9 @@
 use anyhow::Context;
 use directories::BaseDirs;
 use prism_core::types::config::PrismConfig;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(test)]
+use std::path::Path;
 
 /// Reads and writes Prism's global configuration file.
 #[derive(Debug, Clone)]
@@ -24,11 +26,13 @@ impl ConfigManager {
     /// Create a config manager using an explicit config file path.
     ///
     /// Useful for tests and tooling that need an isolated config file.
+    #[cfg(test)]
     pub fn with_path(config_path: PathBuf) -> Self {
         Self { config_path }
     }
 
     /// Return the full path to the config file.
+    #[cfg(test)]
     pub fn path(&self) -> &Path {
         &self.config_path
     }
@@ -40,10 +44,7 @@ impl ConfigManager {
         }
 
         let content = std::fs::read_to_string(&self.config_path).with_context(|| {
-            format!(
-                "Failed to read config file {}",
-                self.config_path.display()
-            )
+            format!("Failed to read config file {}", self.config_path.display())
         })?;
 
         let config: PrismConfig = toml::from_str(&content).with_context(|| {
@@ -57,24 +58,19 @@ impl ConfigManager {
     }
 
     /// Save config to disk in TOML format.
+    #[cfg(test)]
     pub fn save(&self, config: &PrismConfig) -> anyhow::Result<()> {
         if let Some(parent) = self.config_path.parent() {
             std::fs::create_dir_all(parent).with_context(|| {
-                format!(
-                    "Failed to create config directory {}",
-                    parent.display()
-                )
+                format!("Failed to create config directory {}", parent.display())
             })?;
         }
 
-        let serialized = toml::to_string_pretty(config)
-            .context("Failed to serialize Prism config to TOML")?;
+        let serialized =
+            toml::to_string_pretty(config).context("Failed to serialize Prism config to TOML")?;
 
         std::fs::write(&self.config_path, serialized).with_context(|| {
-            format!(
-                "Failed to write config file {}",
-                self.config_path.display()
-            )
+            format!("Failed to write config file {}", self.config_path.display())
         })?;
 
         Ok(())
@@ -107,7 +103,10 @@ mod tests {
 
         let loaded = manager.load().expect("load default config");
 
-        assert_eq!(loaded.default_network, PrismConfig::default().default_network);
+        assert_eq!(
+            loaded.default_network,
+            PrismConfig::default().default_network
+        );
         assert!(!path.exists());
     }
 

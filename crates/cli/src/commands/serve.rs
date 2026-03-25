@@ -1,13 +1,13 @@
 //! `prism serve` — Start WebSocket server for streaming trace updates.
 
 use clap::Args;
+use futures_util::{SinkExt, StreamExt};
 use prism_core::types::config::NetworkConfig;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::broadcast;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::broadcast;
 use tokio_tungstenite::{accept_async, tungstenite::Message};
-use futures_util::{StreamExt, SinkExt};
 
 #[derive(Args)]
 pub struct ServeArgs {
@@ -54,15 +54,13 @@ pub enum TraceStreamMessage {
         duration_ms: u64,
     },
     /// An error occurred during tracing.
-    TraceError {
-        error: String,
-    },
+    TraceError { error: String },
 }
 
 pub async fn run(args: ServeArgs, network: &NetworkConfig) -> anyhow::Result<()> {
     let addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;
     let listener = TcpListener::bind(&addr).await?;
-    
+
     println!("🚀 Prism WebSocket server listening on ws://{}", addr);
     println!("   Ready to stream trace updates to connected clients");
     println!("   Press Ctrl+C to stop");
@@ -82,11 +80,7 @@ pub async fn run(args: ServeArgs, network: &NetworkConfig) -> anyhow::Result<()>
     }
 }
 
-async fn handle_connection(
-    stream: TcpStream,
-    peer_addr: SocketAddr,
-    network: Arc<NetworkConfig>,
-) {
+async fn handle_connection(stream: TcpStream, peer_addr: SocketAddr, network: Arc<NetworkConfig>) {
     tracing::info!("New WebSocket connection from {}", peer_addr);
 
     let ws_stream = match accept_async(stream).await {
@@ -198,22 +192,23 @@ async fn stream_trace_replay(
     });
 
     // Execute with streaming tracing
-    let result = match prism_core::replay::sandbox::execute_with_tracing(&ledger_state, tx_hash).await {
-        Ok(r) => r,
-        Err(e) => {
-            let _ = sender.send(TraceStreamMessage::TraceError {
-                error: format!("Sandbox execution failed: {}", e),
-            });
-            return Err(e.into());
-        }
-    };
+    let result =
+        match prism_core::replay::sandbox::execute_with_tracing(&ledger_state, tx_hash).await {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = sender.send(TraceStreamMessage::TraceError {
+                    error: format!("Sandbox execution failed: {}", e),
+                });
+                return Err(e.into());
+            }
+        };
 
     // Stream trace nodes as they're built
     let mut node_count = 0;
     for (idx, event) in result.events.iter().enumerate() {
         // Convert trace event to streamable node
         let node_json = serde_json::to_value(event)?;
-        
+
         let _ = sender.send(TraceStreamMessage::TraceNode {
             node: node_json,
             path: vec![idx],

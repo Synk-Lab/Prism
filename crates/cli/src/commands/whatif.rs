@@ -13,8 +13,15 @@ pub struct WhatifArgs {
     pub modify: Option<String>,
 }
 
-pub async fn run(args: WhatifArgs, network: &NetworkConfig, output_format: &str) -> anyhow::Result<()> {
-    println!("What-if simulation for {}", args.tx_hash);
+pub async fn run(
+    args: WhatifArgs,
+    network: &NetworkConfig,
+    output_format: &str,
+) -> anyhow::Result<()> {
+    println!(
+        "What-if simulation for {} on {:?} as {} output",
+        args.tx_hash, network.network, output_format
+    );
 
     if let Some(patch_file) = &args.modify {
         let patch_content = std::fs::read_to_string(patch_file)?;

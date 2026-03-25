@@ -37,8 +37,8 @@ pub async fn run(
                 // Bid fee is not currently exposed in the decoded report pipeline.
                 let bid_fee: Option<i64> = None;
                 let resource_fee = fee_context.map(|fee| fee.resource_fee);
-                let total_charged_fee = fee_context
-                    .and_then(|fee| fee.inclusion_fee.checked_add(fee.resource_fee));
+                let total_charged_fee =
+                    fee_context.and_then(|fee| fee.inclusion_fee.checked_add(fee.resource_fee));
                 let inclusion_fee = match (total_charged_fee, resource_fee) {
                     (Some(charged), Some(resource)) => charged.checked_sub(resource),
                     _ => None,

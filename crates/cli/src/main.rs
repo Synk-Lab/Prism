@@ -27,6 +27,7 @@ const BUILD_HASH: &str = env!("PRISM_BUILD_HASH");
 #[derive(Parser)]
 #[command(
     name = "prism",
+    version = env!("CARGO_PKG_VERSION"),
     disable_version_flag = true,
     about,
     long_about = None
@@ -78,9 +79,12 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let version = Box::leak(build_version().into_boxed_str());
+    let version: &'static str = Box::leak(build_version().into_boxed_str());
     let matches = Cli::command().version(version).get_matches();
     let cli = Cli::from_arg_matches(&matches)?;
+    let loaded_config = config::ConfigManager::new()
+        .and_then(|manager| manager.load())
+        .ok();
 
     // Initialize logging before resolving the network or dispatching commands.
     tracing_subscriber::fmt()
@@ -95,6 +99,7 @@ async fn main() -> anyhow::Result<()> {
         output = %cli.output,
         network_arg = %cli.network,
         verbose = cli.verbose,
+        config_loaded = loaded_config.is_some(),
         "CLI arguments parsed"
     );
 
@@ -180,6 +185,33 @@ mod tests {
         let cli = Cli::try_parse_from(["prism", "decode", "--verbose", "abc123"])
             .expect("cli should parse");
         assert_eq!(cli.verbose, 1);
+    }
+
+    #[test]
+    fn parses_trace_tx_hash_as_positional_argument() {
+        let cli = Cli::try_parse_from(["prism", "trace", "abc123"]).expect("cli should parse");
+
+        match cli.command {
+            Commands::Trace(args) => {
+                assert_eq!(args.tx_hash, "abc123");
+                assert!(args.output_file.is_none());
+            }
+            _ => panic!("expected trace command"),
+        }
+    }
+
+    #[test]
+    fn parses_trace_output_file_flag_with_positional_tx_hash() {
+        let cli = Cli::try_parse_from(["prism", "trace", "abc123", "--output-file", "trace.json"])
+            .expect("cli should parse");
+
+        match cli.command {
+            Commands::Trace(args) => {
+                assert_eq!(args.tx_hash, "abc123");
+                assert_eq!(args.output_file.as_deref(), Some("trace.json"));
+            }
+            _ => panic!("expected trace command"),
+        }
     }
 
     #[test]
