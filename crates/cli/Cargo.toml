@@ -26,10 +26,14 @@ tokio = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+toml = { workspace = true }
 
 # TUI (Tier 3)
 ratatui = { workspace = true }
 crossterm = { workspace = true }
+
+# Paths
+directories = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
