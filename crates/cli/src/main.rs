@@ -52,48 +52,48 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Decode a transaction error into plain English.
-    #[command(subcommand_help_heading = "Analysis Commands")]
+    /// Decode a transaction error into plain English with root cause analysis.
+    #[command(subcommand_help_heading = "Analysis")]
     Decode(commands::decode::DecodeArgs),
 
-    /// Inspect full transaction context.
-    #[command(subcommand_help_heading = "Analysis Commands")]
+    /// Inspect the full transaction context including arguments, auth, and resources.
+    #[command(subcommand_help_heading = "Analysis")]
     Inspect(commands::inspect::InspectArgs),
 
-    /// Replay transaction and output execution trace.
-    #[command(subcommand_help_heading = "Analysis Commands")]
+    /// Replay a transaction and generate a hierarchical execution trace.
+    #[command(subcommand_help_heading = "Analysis")]
     Trace(commands::trace::TraceArgs),
 
-    /// Generate resource consumption profile.
-    #[command(subcommand_help_heading = "Analysis Commands")]
+    /// Generate a detailed resource consumption profile for a transaction.
+    #[command(subcommand_help_heading = "Analysis")]
     Profile(commands::profile::ProfileArgs),
 
-    /// Show state diff (before/after) for a transaction.
+    /// Compare ledger state before and after transaction execution.
     #[command(subcommand_help_heading = "State & Simulation")]
     Diff(commands::diff::DiffArgs),
 
-    /// Re-simulate with modified inputs.
+    /// Re-simulate a transaction with modified inputs or state patches.
     #[command(subcommand_help_heading = "State & Simulation")]
     Whatif(commands::whatif::WhatifArgs),
 
-    /// Launch interactive TUI debugger.
-    #[command(subcommand_help_heading = "Development Tools")]
+    /// Launch the interactive TUI debugger for step-through execution.
+    #[command(subcommand_help_heading = "Development")]
     Replay(commands::replay::ReplayArgs),
 
-    /// Export debug session as a regression test.
-    #[command(subcommand_help_heading = "Development Tools")]
+    /// Export a debug session as a standalone regression test case.
+    #[command(subcommand_help_heading = "Development")]
     Export(commands::export::ExportArgs),
 
-    /// Start WebSocket server for streaming trace updates.
-    #[command(subcommand_help_heading = "Development Tools")]
+    /// Start a WebSocket server for real-time trace streaming.
+    #[command(subcommand_help_heading = "Development")]
     Serve(commands::serve::ServeArgs),
 
-    /// Clear local cache data.
-    #[command(subcommand_help_heading = "Configuration & Maintenance")]
+    /// Clear local cache data and temporary session files.
+    #[command(subcommand_help_heading = "Configuration")]
     Clean(commands::clean::CleanArgs),
 
-    /// Manage the error taxonomy database.
-    #[command(subcommand_help_heading = "Configuration & Maintenance")]
+    /// Manage and update the error taxonomy database.
+    #[command(subcommand_help_heading = "Configuration")]
     Db(commands::db::DbArgs),
 }
 
