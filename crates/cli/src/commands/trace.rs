@@ -11,12 +11,20 @@ pub struct TraceArgs {
     /// Output trace to a file instead of stdout.
     #[arg(long, short)]
     pub output_file: Option<String>,
+
+    /// Show authorization tree view.
+    #[arg(long)]
+    pub auth: bool,
+
+    /// Show only authorization structure (no resource details).
+    #[arg(long)]
+    pub auth_only: bool,
 }
 
 pub async fn run(
     args: TraceArgs,
     network: &NetworkConfig,
-    output_format: &str,
+    output_format: &str
 ) -> anyhow::Result<()> {
     let progress = indicatif::ProgressBar::new_spinner();
     progress.set_message("Reconstructing state and replaying transaction...");
@@ -26,7 +34,15 @@ pub async fn run(
 
     progress.finish_and_clear();
 
-    let output = crate::output::format_trace(&trace, output_format)?;
+    let output = if args.auth || args.auth_only {
+        if args.auth_only {
+            prism_cli::output::auth_tree::render_auth_only(&trace)?
+        } else {
+            prism_cli::output::auth_tree::render_auth_tree(&trace)?
+        }
+    } else {
+        crate::output::format_trace(&trace, output_format)?
+    };
 
     if let Some(path) = args.output_file {
         std::fs::write(&path, &output)?;

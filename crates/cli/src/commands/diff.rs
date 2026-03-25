@@ -12,7 +12,7 @@ pub struct DiffArgs {
 pub async fn run(
     args: DiffArgs,
     network: &NetworkConfig,
-    output_format: &str,
+    output_format: &str
 ) -> anyhow::Result<()> {
     let progress = indicatif::ProgressBar::new_spinner();
     progress.set_message("Computing state diff...");
@@ -22,7 +22,29 @@ pub async fn run(
 
     progress.finish_and_clear();
 
-    crate::output::print_state_diff(&trace.state_diff, output_format)?;
+    match output_format {
+        "json" => println!("{}", serde_json::to_string_pretty(&trace.state_diff)?),
+        _ => {
+            println!("{}", colored::Colorize::bold("State Diff"));
+            for entry in &trace.state_diff.entries {
+                let symbol = match entry.change_type {
+                    prism_core::types::trace::DiffChangeType::Created => {
+                        colored::Colorize::green("+")
+                    }
+                    prism_core::types::trace::DiffChangeType::Deleted => {
+                        colored::Colorize::red("-")
+                    }
+                    prism_core::types::trace::DiffChangeType::Updated => {
+                        colored::Colorize::yellow("~")
+                    }
+                    prism_core::types::trace::DiffChangeType::Unchanged => {
+                        colored::Colorize::dimmed(" ")
+                    }
+                };
+                println!("{symbol} {}", entry.key);
+            }
+        }
+    }
 
     Ok(())
 }

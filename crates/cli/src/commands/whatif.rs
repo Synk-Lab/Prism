@@ -18,7 +18,7 @@ pub async fn run(
     network: &NetworkConfig,
     output_format: &str,
 ) -> anyhow::Result<()> {
-    let _ = network;
+    println!("What-if simulation for {}", args.tx_hash);
 
     if let Some(patch_file) = &args.modify {
         let patch_content = std::fs::read_to_string(patch_file)?;
