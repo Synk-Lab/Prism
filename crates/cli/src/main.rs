@@ -27,12 +27,13 @@ const BUILD_HASH: &str = env!("PRISM_BUILD_HASH");
 #[derive(Parser)]
 #[command(
     name = "prism",
+    version,
+    about = "Prism — Soroban Transaction Debugger",
+    long_about = "From cryptic error to root cause in one command.\n\nPrism helps you diagnose, trace, and debug Soroban transactions by decoding XDR, replaying execution, and providing resource profiles.",
     disable_version_flag = true,
-    about,
-    long_about = None,
-    arg_required_else_help = true
+    arg_required_else_help = true,
+    propagate_version = true
 )]
-#[command(propagate_version = true)]
 struct Cli {
     /// Subcommand to execute.
     #[command(subcommand)]
@@ -79,8 +80,21 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let version = Box::leak(build_version().into_boxed_str());
-    let matches = Cli::command().version(version).get_matches();
+    let version = build_version();
+    
+    // Attempt to parse matches, but catch help and missing subcommand requests
+    // to ensure they exit gracefully with status 0 as per Task #1 requirements.
+    let matches = match Cli::command().version(version.clone()).try_get_matches() {
+        Ok(m) => m,
+        Err(e) => {
+            if e.kind() == clap::error::ErrorKind::DisplayHelp || e.kind() == clap::error::ErrorKind::MissingSubcommand {
+                e.print()?;
+                std::process::exit(0);
+            }
+            e.exit();
+        }
+    };
+
     let cli = Cli::from_arg_matches(&matches)?;
 
     // Initialize logging before resolving the network or dispatching commands.
