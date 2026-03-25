@@ -13,8 +13,6 @@ use crate::types::error::{PrismError, PrismResult};
 /// # Returns
 /// The raw decoded bytes, ready for further parsing.
 pub fn decode_xdr_base64(xdr_base64: &str) -> PrismResult<Vec<u8>> {
-    use stellar_xdr::curr::ReadXdr;
-    let _ = ReadXdr::from_xdr_base64;
     // TODO: Implement full XDR decoding pipeline
     let bytes = base64_decode(xdr_base64)
         .map_err(|e| PrismError::XdrError(format!("Base64 decode failed: {e}")))?;
