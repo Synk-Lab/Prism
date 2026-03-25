@@ -10,6 +10,7 @@
 //!   prism whatif <tx-hash>       — Re-simulate with modifications
 //!   prism export <tx-hash>       — Export as regression test
 //!   prism db update              — Update taxonomy database
+//!   prism serve                  — Start web server for Prism Web UI
 
 mod commands;
 mod output;
@@ -59,6 +60,8 @@ enum Commands {
     Export(commands::export::ExportArgs),
     /// Manage the error taxonomy database.
     Db(commands::db::DbArgs),
+    /// Start a local web server to host the Prism Web UI.
+    Serve(commands::serve::ServeArgs),
 }
 
 #[tokio::main]
@@ -85,6 +88,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Whatif(args) => commands::whatif::run(args, &network, &cli.output).await?,
         Commands::Export(args) => commands::export::run(args, &network).await?,
         Commands::Db(args) => commands::db::run(args).await?,
+        Commands::Serve(args) => commands::serve::run(args).await?,
     }
 
     Ok(())
