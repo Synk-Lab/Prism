@@ -198,15 +198,26 @@ mod tests {
 
     #[test]
     fn parses_long_verbose_flag_after_subcommand() {
-        let cli = Cli::try_parse_from(["prism", "decode", "--verbose", "abc123"])
-            .expect("cli should parse");
+        let cli = Cli::try_parse_from([
+            "prism",
+            "decode",
+            "--verbose",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        ])
+        .expect("cli should parse");
         assert_eq!(cli.verbose, 1);
     }
 
     #[test]
     fn parses_short_output_alias() {
-        let cli = Cli::try_parse_from(["prism", "--output", "short", "decode", "abc123"])
-            .expect("cli should parse");
+        let cli = Cli::try_parse_from([
+            "prism",
+            "--output",
+            "short",
+            "decode",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        ])
+        .expect("cli should parse");
         assert_eq!(cli.output, "short");
     }
 
