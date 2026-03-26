@@ -9,6 +9,7 @@ pub mod compact;
 pub mod human;
 pub mod json;
 pub mod renderers;
+pub mod auth_tree;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputMode {
@@ -66,6 +67,28 @@ pub fn print_resource_profile(
     Ok(())
 }
 
+pub fn format_resource_profile(
+    profile: &ResourceProfile,
+    output_format: &str
+) -> anyhow::Result<String> {
+    Ok(match OutputMode::parse(output_format) {
+        OutputMode::Json => serde_json::to_string_pretty(profile)?,
+        OutputMode::Short => format_resource_profile_summary(profile),
+        OutputMode::Human => {
+            let mut output = format!("{}\n", colored::Colorize::bold("Resource Profile"));
+            output.push_str(
+                &format!("CPU: {}/{} instructions\n", profile.total_cpu, profile.cpu_limit)
+            );
+            output.push_str(
+                &format!("Memory: {}/{} bytes\n", profile.total_memory, profile.memory_limit)
+            );
+            for warning in &profile.warnings {
+                output.push_str(&format!("{} {}\n", colored::Colorize::yellow("!"), warning));
+            }
+            output
+        }
+    })
+}
 pub fn print_state_diff(diff: &StateDiff, output_format: &str) -> anyhow::Result<()> {
     match OutputMode::parse(output_format) {
         OutputMode::Json => println!("{}", serde_json::to_string_pretty(diff)?),

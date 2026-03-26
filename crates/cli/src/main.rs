@@ -11,6 +11,7 @@
 //!   prism export <tx-hash>       — Export as regression test
 //!   prism db update              — Update taxonomy database
 //!   prism clean                  — Clear local cache data
+//!   prism serve                  — Launch Web UI dashboard
 
 mod commands;
 mod config;
@@ -20,24 +21,6 @@ mod tui;
 use clap::{ ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand };
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-pub enum Network {
-    Mainnet,
-    Testnet,
-    Futurenet,
-}
-
-impl std::fmt::Display for Network {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Self::Mainnet => "mainnet",
-            Self::Testnet => "testnet",
-            Self::Futurenet => "futurenet",
-        };
-        write!(f, "{}", s)
-    }
-}
 
 /// Prism — From cryptic error to root cause in one command.
 #[derive(Parser)]
@@ -57,9 +40,9 @@ struct Cli {
     )]
     output: String,
 
-    /// Network: mainnet, testnet, or futurenet.
+    /// Network: mainnet, testnet, futurenet, or a custom RPC URL.
     #[arg(long, short, default_value = "testnet", global = true)]
-    network: Network,
+    network: String,
 
     /// Enable verbose logging. Repeat for more detail.
     #[arg(long, short, action = ArgAction::Count, global = true)]
@@ -69,34 +52,53 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Decode a transaction error into plain English.
+    #[command(subcommand_help_heading = "Analysis Commands")]
     Decode(commands::decode::DecodeArgs),
+
     /// Inspect full transaction context.
+    #[command(subcommand_help_heading = "Analysis Commands")]
     Inspect(commands::inspect::InspectArgs),
+
     /// Replay transaction and output execution trace.
+    #[command(subcommand_help_heading = "Analysis Commands")]
     Trace(commands::trace::TraceArgs),
+
     /// Generate resource consumption profile.
+    #[command(subcommand_help_heading = "Analysis Commands")]
     Profile(commands::profile::ProfileArgs),
+
     /// Show state diff (before/after) for a transaction.
+    #[command(subcommand_help_heading = "State & Simulation")]
     Diff(commands::diff::DiffArgs),
-    /// Launch interactive TUI debugger.
-    Replay(commands::replay::ReplayArgs),
+
     /// Re-simulate with modified inputs.
+    #[command(subcommand_help_heading = "State & Simulation")]
     Whatif(commands::whatif::WhatifArgs),
+
+    /// Launch interactive TUI debugger.
+    #[command(subcommand_help_heading = "Development Tools")]
+    Replay(commands::replay::ReplayArgs),
+
     /// Export debug session as a regression test.
+    #[command(subcommand_help_heading = "Development Tools")]
     Export(commands::export::ExportArgs),
-    /// Clear local cache data.
-    Clean(commands::clean::CleanArgs),
-    /// Manage the error taxonomy database.
-    Db(commands::db::DbArgs),
-    /// Start WebSocket server for streaming trace updates.
+
+    /// Launch Web UI dashboard.
+    #[command(subcommand_help_heading = "Development Tools")]
     Serve(commands::serve::ServeArgs),
+
+    /// Clear local cache data.
+    #[command(subcommand_help_heading = "Configuration & Maintenance")]
+    Clean(commands::clean::CleanArgs),
+
+    /// Manage the error taxonomy database.
+    #[command(subcommand_help_heading = "Configuration & Maintenance")]
+    Db(commands::db::DbArgs),
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let version = Box::leak(build_version().into_boxed_str());
-    let matches = Cli::command().version(version).get_matches();
-    let cli = Cli::from_arg_matches(&matches)?;
+    let cli = Cli::parse();
 
     // Initialize logging before resolving the network or dispatching commands.
     tracing_subscriber
@@ -116,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Resolve network configuration
-    let network = prism_core::network::config::resolve_network(&cli.network.to_string());
+    let network = prism_core::network::config::resolve_network(&cli.network);
     tracing::debug!(
         resolved_network = ?network.network,
         rpc_url = %network.rpc_url,
@@ -136,19 +138,10 @@ async fn main() -> anyhow::Result<()> {
         Commands::Export(args) => commands::export::run(args, &network).await?,
         Commands::Clean(args) => commands::clean::run(args).await?,
         Commands::Db(args) => commands::db::run(args).await?,
-        Commands::Serve(args) => commands::serve::run(args, &network).await?,
+        Commands::Serve(args) => commands::serve::run(args).await?,
     }
 
     Ok(())
-}
-
-fn build_version() -> String {
-    format!(
-        "prism {} (build: {}) | Soroban Protocol: {}",
-        prism_core::VERSION,
-        BUILD_HASH,
-        prism_core::SOROBAN_PROTOCOL_VERSION
-    )
 }
 
 fn build_log_filter(verbose: u8) -> EnvFilter {
@@ -207,15 +200,5 @@ mod tests {
         assert!(warn.contains("prism=warn"));
         assert!(debug.contains("prism=debug"));
         assert!(trace.contains("prism=trace"));
-        assert!(trace.contains("prism_core=trace"));
-    }
-
-    #[test]
-    fn version_string_includes_build_hash_and_protocol() {
-        let version = build_version();
-
-        assert!(version.contains(prism_core::VERSION));
-        assert!(version.contains(BUILD_HASH));
-        assert!(version.contains(&prism_core::SOROBAN_PROTOCOL_VERSION.to_string()));
     }
 }

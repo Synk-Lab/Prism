@@ -1,18 +1,47 @@
-//! Output renderers for CLI reports.
-//!
-//! This module contains specialized renderers for different output formats.
+//! Shared terminal renderers for CLI output.
 
-use prism_core::types::report::{DiagnosticReport, SuggestedFix};
+use colored::{ColoredString, Colorize};
 
-/// Renders a bulleted list of suggested fixes from the diagnostic report.
-///
-/// Each fix is displayed with a distinctive icon indicating its characteristics:
-/// - 🔧 for standard fixes
-/// - ⚠️ for fixes that require a contract upgrade
-/// - 📋 for fixes with code examples
-pub fn render_fix_list(report: &DiagnosticReport) -> String {
-    if report.suggested_fixes.is_empty() {
-        return String::new();
+const BAR_WIDTH: usize = 10;
+
+/// Render a boxed section header suitable for terminal report sections.
+pub fn render_section_header(title: &str) -> String {
+    SectionHeader::new(title).render()
+}
+
+/// Utility for rendering a clearly separated section heading.
+pub struct SectionHeader<'a> {
+    title: &'a str,
+}
+
+impl<'a> SectionHeader<'a> {
+    pub fn new(title: &'a str) -> Self {
+        Self { title }
+    }
+
+    pub fn render(&self) -> String {
+        let normalized_title = self.title.trim().to_uppercase();
+        let inner = format!(" {} ", normalized_title);
+        let border = format!("+{}+", "-".repeat(inner.chars().count()));
+        let middle = format!("|{}|", inner);
+
+        let border = border.cyan().bold().to_string();
+        let middle = middle.white().bold().to_string();
+
+        format!("{}\n{}\n{}", border, middle, border)
+    }
+}
+
+/// Renders a colored budget utilization bar for Soroban resource usage.
+pub struct BudgetBar {
+    label: &'static str,
+    used: u64,
+    limit: u64,
+}
+
+impl BudgetBar {
+    pub fn new(label: &'static str, used: u64, limit: u64) -> Self {
+        Self { label, used, limit }
     }
 
     let mut output = String::new();
@@ -64,43 +93,7 @@ fn get_difficulty_badge(difficulty: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use prism_core::types::report::Severity;
-
-    fn create_test_report() -> DiagnosticReport {
-        DiagnosticReport {
-            error_category: "Budget".to_string(),
-            error_code: 1,
-            error_name: "cpu_limit_exceeded".to_string(),
-            summary: "CPU usage exceeded limit".to_string(),
-            detailed_explanation: "The contract used more CPU than allowed.".to_string(),
-            severity: Severity::Error,
-            root_causes: vec![],
-            suggested_fixes: vec![
-                SuggestedFix {
-                    description: "Reduce the number of loop iterations".to_string(),
-                    difficulty: "easy".to_string(),
-                    requires_upgrade: false,
-                    example: Some("Use for_each instead of iterate".to_string()),
-                },
-                SuggestedFix {
-                    description: "Optimize your contract logic".to_string(),
-                    difficulty: "medium".to_string(),
-                    requires_upgrade: false,
-                    example: None,
-                },
-                SuggestedFix {
-                    description: "Upgrade to a newer contract version".to_string(),
-                    difficulty: "hard".to_string(),
-                    requires_upgrade: true,
-                    example: None,
-                },
-            ],
-            contract_error: None,
-            transaction_context: None,
-            related_errors: vec![],
-        }
-    }
+    use super::{render_section_header, BudgetBar, SectionHeader};
 
     #[test]
     fn test_render_fix_list_with_fixes() {
@@ -159,5 +152,21 @@ mod tests {
         assert_eq!(get_difficulty_badge("medium"), " [medium]");
         assert_eq!(get_difficulty_badge("hard"), " [hard]");
         assert_eq!(get_difficulty_badge("unknown"), "");
+    }
+
+    #[test]
+    fn section_header_renders_boxed_uppercase_title() {
+        let rendered = SectionHeader::new("Transaction Summary").render();
+
+        assert!(rendered.contains("TRANSACTION SUMMARY"));
+        assert!(rendered.contains("+"));
+        assert!(rendered.contains("|"));
+    }
+
+    #[test]
+    fn section_header_function_trims_title() {
+        let rendered = render_section_header("  network info  ");
+
+        assert!(rendered.contains("NETWORK INFO"));
     }
 }
