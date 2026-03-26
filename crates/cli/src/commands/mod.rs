@@ -11,3 +11,4 @@ pub mod replay;
 pub mod serve;
 pub mod trace;
 pub mod whatif;
+pub mod diagnostic;

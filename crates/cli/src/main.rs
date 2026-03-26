@@ -105,6 +105,10 @@ enum Commands {
     /// Manage the error taxonomy database.
     #[command(subcommand_help_heading = "Configuration & Maintenance")]
     Db(commands::db::DbArgs),
+
+    /// Run a self-test: binary version, network connectivity, and cache health.
+    #[command(subcommand_help_heading = "Configuration & Maintenance")]
+    Diagnostic(commands::diagnostic::DiagnosticArgs),
 }
 
 #[tokio::main]
@@ -162,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Clean(args) => commands::clean::run(args).await?,
         Commands::Db(args) => commands::db::run(args).await?,
         Commands::Serve(args) => commands::serve::run(args).await?,
+        Commands::Diagnostic(args) => commands::diagnostic::run(args).await?,
     }
 
     Ok(())
