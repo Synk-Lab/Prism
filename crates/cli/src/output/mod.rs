@@ -5,11 +5,11 @@ use prism_core::types::{
     trace::{ DiffChangeType, ExecutionTrace, ResourceProfile, StateDiff },
 };
 
+pub mod auth_tree;
 pub mod compact;
 pub mod human;
 pub mod json;
 pub mod renderers;
-pub mod auth_tree;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputMode {
@@ -55,43 +55,26 @@ pub fn print_resource_profile(
         OutputMode::Json => println!("{}", serde_json::to_string_pretty(profile)?),
         OutputMode::Short => println!("{}", format_resource_profile_summary(profile)),
         OutputMode::Human => {
-            println!("{}", colored::Colorize::bold("Resource Profile"));
-            println!("CPU: {}/{} instructions", profile.total_cpu, profile.cpu_limit);
-            println!("Memory: {}/{} bytes", profile.total_memory, profile.memory_limit);
+            println!("{}", renderers::render_section_header("Resource Profile"));
+            println!(
+                "{}",
+                renderers::BudgetBar::new("CPU", profile.total_cpu, profile.cpu_limit).render()
+            );
+            println!(
+                "{}",
+                renderers::BudgetBar::new("Memory", profile.total_memory, profile.memory_limit)
+                    .render()
+            );
             for warning in &profile.warnings {
-                println!("{} {warning}", colored::Colorize::yellow("!"));
+                println!("{} {warning}", colored::Colorize::yellow("⚠"));
             }
+            println!();
+            print!("{}", renderers::render_heatmap(profile));
         }
     }
 
     Ok(())
 }
-
-<<<<<<< HEAD
-=======
-pub fn format_resource_profile(profile: &ResourceProfile, output_format: &str) -> anyhow::Result<String> {
-    Ok(match OutputMode::parse(output_format) {
-        OutputMode::Json => serde_json::to_string_pretty(profile)?,
-        OutputMode::Short => format_resource_profile_summary(profile),
-        OutputMode::Human => {
-            let mut output = format!("{}\n", colored::Colorize::bold("Resource Profile"));
-            output.push_str(&format!(
-                "CPU: {}/{} instructions\n",
-                profile.total_cpu, profile.cpu_limit
-            ));
-            output.push_str(&format!(
-                "Memory: {}/{} bytes\n",
-                profile.total_memory, profile.memory_limit
-            ));
-            for warning in &profile.warnings {
-                output.push_str(&format!("{} {}\n", colored::Colorize::yellow("!"), warning));
-            }
-            output
-        }
-    })
-}
-
->>>>>>> origin/main
 pub fn print_state_diff(diff: &StateDiff, output_format: &str) -> anyhow::Result<()> {
     match OutputMode::parse(output_format) {
         OutputMode::Json => println!("{}", serde_json::to_string_pretty(diff)?),
