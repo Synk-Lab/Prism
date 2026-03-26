@@ -20,13 +20,10 @@ colored = { workspace = true }
 indicatif = { workspace = true }
 dialoguer = { workspace = true }
 tabled = { workspace = true }
+termcolor = { workspace = true }
 
 # Async
 tokio = { workspace = true }
-
-# WebSocket
-tokio-tungstenite = { workspace = true }
-futures-util = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
@@ -43,6 +40,8 @@ directories = { workspace = true }
 # Logging
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+
+url = "2"
 
 [dev-dependencies]
 assert_cmd = "2"

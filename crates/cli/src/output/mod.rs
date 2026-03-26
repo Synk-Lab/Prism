@@ -2,12 +2,14 @@
 
 use prism_core::types::{
     report::DiagnosticReport,
-    trace::{DiffChangeType, ExecutionTrace, ResourceProfile, StateDiff},
+    trace::{ DiffChangeType, ExecutionTrace, ResourceProfile, StateDiff },
 };
 
 pub mod compact;
 pub mod human;
 pub mod json;
+pub mod renderers;
+pub mod auth_tree;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputMode {
@@ -28,7 +30,7 @@ impl OutputMode {
 
 pub fn print_diagnostic_report(
     report: &DiagnosticReport,
-    output_format: &str,
+    output_format: &str
 ) -> anyhow::Result<()> {
     match OutputMode::parse(output_format) {
         OutputMode::Json => json::print_report(report),
@@ -47,21 +49,15 @@ pub fn format_trace(trace: &ExecutionTrace, output_format: &str) -> anyhow::Resu
 
 pub fn print_resource_profile(
     profile: &ResourceProfile,
-    output_format: &str,
+    output_format: &str
 ) -> anyhow::Result<()> {
     match OutputMode::parse(output_format) {
         OutputMode::Json => println!("{}", serde_json::to_string_pretty(profile)?),
         OutputMode::Short => println!("{}", format_resource_profile_summary(profile)),
         OutputMode::Human => {
             println!("{}", colored::Colorize::bold("Resource Profile"));
-            println!(
-                "CPU: {}/{} instructions",
-                profile.total_cpu, profile.cpu_limit
-            );
-            println!(
-                "Memory: {}/{} bytes",
-                profile.total_memory, profile.memory_limit
-            );
+            println!("CPU: {}/{} instructions", profile.total_cpu, profile.cpu_limit);
+            println!("Memory: {}/{} bytes", profile.total_memory, profile.memory_limit);
             for warning in &profile.warnings {
                 println!("{} {warning}", colored::Colorize::yellow("!"));
             }
@@ -71,6 +67,28 @@ pub fn print_resource_profile(
     Ok(())
 }
 
+pub fn format_resource_profile(
+    profile: &ResourceProfile,
+    output_format: &str
+) -> anyhow::Result<String> {
+    Ok(match OutputMode::parse(output_format) {
+        OutputMode::Json => serde_json::to_string_pretty(profile)?,
+        OutputMode::Short => format_resource_profile_summary(profile),
+        OutputMode::Human => {
+            let mut output = format!("{}\n", colored::Colorize::bold("Resource Profile"));
+            output.push_str(
+                &format!("CPU: {}/{} instructions\n", profile.total_cpu, profile.cpu_limit)
+            );
+            output.push_str(
+                &format!("Memory: {}/{} bytes\n", profile.total_memory, profile.memory_limit)
+            );
+            for warning in &profile.warnings {
+                output.push_str(&format!("{} {}\n", colored::Colorize::yellow("!"), warning));
+            }
+            output
+        }
+    })
+}
 pub fn print_state_diff(diff: &StateDiff, output_format: &str) -> anyhow::Result<()> {
     match OutputMode::parse(output_format) {
         OutputMode::Json => println!("{}", serde_json::to_string_pretty(diff)?),
@@ -96,17 +114,19 @@ pub fn print_whatif_status(
     tx_hash: &str,
     patch_file: Option<&str>,
     patch_count: Option<usize>,
-    output_format: &str,
+    output_format: &str
 ) -> anyhow::Result<()> {
     match OutputMode::parse(output_format) {
-        OutputMode::Short => match (patch_file, patch_count) {
-            (Some(path), Some(count)) => {
-                println!("Status: Ready | Tx: {tx_hash} | Patches: {count} | Source: {path}");
+        OutputMode::Short =>
+            match (patch_file, patch_count) {
+                (Some(path), Some(count)) => {
+                    println!("Status: Ready | Tx: {tx_hash} | Patches: {count} | Source: {path}");
+                }
+                _ => println!("Status: MissingModifyFile | Tx: {tx_hash}"),
             }
-            _ => println!("Status: MissingModifyFile | Tx: {tx_hash}"),
-        },
         OutputMode::Json => {
-            let payload = serde_json::json!({
+            let payload =
+                serde_json::json!({
                 "tx_hash": tx_hash,
                 "patch_file": patch_file,
                 "patch_count": patch_count,
@@ -118,7 +138,9 @@ pub fn print_whatif_status(
             match patch_file {
                 Some(path) => println!("Patches loaded from {path}"),
                 None => {
-                    println!("No --modify file provided. Use a JSON patch file to specify modifications.")
+                    println!(
+                        "No --modify file provided. Use a JSON patch file to specify modifications."
+                    );
                 }
             }
         }
@@ -162,9 +184,15 @@ fn format_state_diff_summary(diff: &StateDiff) -> String {
 
     for entry in &diff.entries {
         match entry.change_type {
-            DiffChangeType::Created => created += 1,
-            DiffChangeType::Updated => updated += 1,
-            DiffChangeType::Deleted => deleted += 1,
+            DiffChangeType::Created => {
+                created += 1;
+            }
+            DiffChangeType::Updated => {
+                updated += 1;
+            }
+            DiffChangeType::Deleted => {
+                deleted += 1;
+            }
             DiffChangeType::Unchanged => {}
         }
     }

@@ -1,257 +1,194 @@
-//! `prism serve` — Start WebSocket server for streaming trace updates.
+//! `prism serve` — Start a local web server to host the Prism Web UI.
 
+use anyhow::Result;
 use clap::Args;
-use prism_core::types::config::NetworkConfig;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::sync::broadcast;
-use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{accept_async, tungstenite::Message};
-use futures_util::{StreamExt, SinkExt};
+use std::io::prelude::*;
+use std::net::{TcpListener, TcpStream};
+use std::thread;
 
+/// Arguments for the serve command.
 #[derive(Args)]
 pub struct ServeArgs {
-    /// Port to listen on for WebSocket connections.
-    #[arg(long, short, default_value = "8080")]
+    /// Port to bind the server to (default: 3000).
+    #[arg(long, short = 'p', default_value = "3000")]
     pub port: u16,
 
-    /// Host to bind to.
+    /// Host to bind the server to (default: 127.0.0.1).
     #[arg(long, default_value = "127.0.0.1")]
     pub host: String,
+
+    /// Open the default browser automatically after starting.
+    #[arg(long)]
+    pub open: bool,
 }
 
-/// Message types sent over WebSocket during trace streaming.
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum TraceStreamMessage {
-    /// Trace session started.
-    TraceStarted {
-        tx_hash: String,
-        ledger_sequence: u32,
-    },
-    /// A new trace node (invocation or host call) was resolved.
-    TraceNode {
-        node: serde_json::Value,
-        path: Vec<usize>,
-    },
-    /// Resource profile update.
-    ResourceUpdate {
-        cpu_used: u64,
-        memory_used: u64,
-        cpu_limit: u64,
-        memory_limit: u64,
-    },
-    /// State diff entry discovered.
-    StateDiffEntry {
-        key: String,
-        before: Option<String>,
-        after: Option<String>,
-        change_type: String,
-    },
-    /// Trace completed successfully.
-    TraceCompleted {
-        total_nodes: usize,
-        duration_ms: u64,
-    },
-    /// An error occurred during tracing.
-    TraceError {
-        error: String,
-    },
-}
+/// Execute the serve command.
+pub async fn run(args: ServeArgs) -> Result<()> {
+    let addr = format!("{}:{}", args.host, args.port);
 
-pub async fn run(args: ServeArgs, network: &NetworkConfig) -> anyhow::Result<()> {
-    let addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;
-    let listener = TcpListener::bind(&addr).await?;
-    
-    println!("🚀 Prism WebSocket server listening on ws://{}", addr);
-    println!("   Ready to stream trace updates to connected clients");
-    println!("   Press Ctrl+C to stop");
+    let listener = TcpListener::bind(&addr)
+        .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
 
-    let network = Arc::new(network.clone());
+    println!("🌐 Prism dashboard available at: http://{}", addr);
+    println!("🔄 Press Ctrl+C to stop the server");
 
-    loop {
-        match listener.accept().await {
-            Ok((stream, peer_addr)) => {
-                let network = Arc::clone(&network);
-                tokio::spawn(handle_connection(stream, peer_addr, network));
-            }
-            Err(e) => {
-                tracing::error!("Failed to accept connection: {}", e);
-            }
-        }
+    if args.open {
+        open_browser(&format!("http://{}", addr));
     }
-}
 
-async fn handle_connection(
-    stream: TcpStream,
-    peer_addr: SocketAddr,
-    network: Arc<NetworkConfig>,
-) {
-    tracing::info!("New WebSocket connection from {}", peer_addr);
-
-    let ws_stream = match accept_async(stream).await {
-        Ok(ws) => ws,
-        Err(e) => {
-            tracing::error!("WebSocket handshake failed: {}", e);
-            return;
-        }
-    };
-
-    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-
-    // Handle incoming messages
-    while let Some(msg) = ws_receiver.next().await {
-        match msg {
-            Ok(Message::Text(text)) => {
-                // Parse trace request
-                if let Ok(request) = serde_json::from_str::<TraceRequest>(&text) {
-                    tracing::info!("Received trace request for tx: {}", request.tx_hash);
-
-                    // Create a channel for streaming trace updates
-                    let (tx, mut rx) = broadcast::channel::<TraceStreamMessage>(100);
-
-                    // Spawn trace replay task
-                    let tx_hash = request.tx_hash.clone();
-                    let network = Arc::clone(&network);
-                    tokio::spawn(async move {
-                        if let Err(e) = stream_trace_replay(&tx_hash, &network, tx).await {
-                            tracing::error!("Trace replay failed: {}", e);
-                        }
-                    });
-
-                    // Forward trace updates to WebSocket
-                    while let Ok(update) = rx.recv().await {
-                        let json = match serde_json::to_string(&update) {
-                            Ok(j) => j,
-                            Err(e) => {
-                                tracing::error!("Failed to serialize trace update: {}", e);
-                                continue;
-                            }
-                        };
-
-                        if let Err(e) = ws_sender.send(Message::Text(json)).await {
-                            tracing::error!("Failed to send WebSocket message: {}", e);
-                            break;
-                        }
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                thread::spawn(move || {
+                    if let Err(e) = handle_connection(stream) {
+                        eprintln!("Connection error: {e}");
                     }
-                } else {
-                    tracing::warn!("Invalid trace request: {}", text);
-                }
+                });
             }
-            Ok(Message::Close(_)) => {
-                tracing::info!("Client {} closed connection", peer_addr);
-                break;
-            }
-            Ok(Message::Ping(data)) => {
-                if let Err(e) = ws_sender.send(Message::Pong(data)).await {
-                    tracing::error!("Failed to send pong: {}", e);
-                    break;
-                }
-            }
-            Err(e) => {
-                tracing::error!("WebSocket error: {}", e);
-                break;
-            }
-            _ => {}
+            Err(e) => eprintln!("Accept error: {e}"),
         }
     }
-
-    tracing::info!("Connection closed: {}", peer_addr);
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct TraceRequest {
-    tx_hash: String,
-}
-
-/// Stream trace replay updates incrementally as nodes are resolved.
-async fn stream_trace_replay(
-    tx_hash: &str,
-    network: &NetworkConfig,
-    sender: broadcast::Sender<TraceStreamMessage>,
-) -> anyhow::Result<()> {
-    use std::time::Instant;
-
-    let start = Instant::now();
-
-    // Send trace started event
-    let _ = sender.send(TraceStreamMessage::TraceStarted {
-        tx_hash: tx_hash.to_string(),
-        ledger_sequence: 0, // Will be updated once state is reconstructed
-    });
-
-    // Reconstruct state
-    let ledger_state = match prism_core::replay::state::reconstruct_state(tx_hash, network).await {
-        Ok(state) => state,
-        Err(e) => {
-            let _ = sender.send(TraceStreamMessage::TraceError {
-                error: format!("Failed to reconstruct state: {}", e),
-            });
-            return Err(e.into());
-        }
-    };
-
-    // Update with actual ledger sequence
-    let _ = sender.send(TraceStreamMessage::TraceStarted {
-        tx_hash: tx_hash.to_string(),
-        ledger_sequence: ledger_state.ledger_sequence,
-    });
-
-    // Execute with streaming tracing
-    let result = match prism_core::replay::sandbox::execute_with_tracing(&ledger_state, tx_hash).await {
-        Ok(r) => r,
-        Err(e) => {
-            let _ = sender.send(TraceStreamMessage::TraceError {
-                error: format!("Sandbox execution failed: {}", e),
-            });
-            return Err(e.into());
-        }
-    };
-
-    // Stream trace nodes as they're built
-    let mut node_count = 0;
-    for (idx, event) in result.events.iter().enumerate() {
-        // Convert trace event to streamable node
-        let node_json = serde_json::to_value(event)?;
-        
-        let _ = sender.send(TraceStreamMessage::TraceNode {
-            node: node_json,
-            path: vec![idx],
-        });
-
-        node_count += 1;
-
-        // Send periodic resource updates
-        if idx % 10 == 0 {
-            let _ = sender.send(TraceStreamMessage::ResourceUpdate {
-                cpu_used: result.total_cpu,
-                memory_used: result.total_memory,
-                cpu_limit: 100_000_000, // TODO: Get from network config
-                memory_limit: 40 * 1024 * 1024,
-            });
-        }
-
-        // Small delay to avoid overwhelming the client
-        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
-    }
-
-    // Compute and stream state diff
-    let state_diff = prism_core::replay::differ::compute_diff(&ledger_state, &result)?;
-    for entry in &state_diff.entries {
-        let _ = sender.send(TraceStreamMessage::StateDiffEntry {
-            key: entry.key.clone(),
-            before: entry.before.clone(),
-            after: entry.after.clone(),
-            change_type: format!("{:?}", entry.change_type),
-        });
-    }
-
-    // Send completion
-    let duration_ms = start.elapsed().as_millis() as u64;
-    let _ = sender.send(TraceStreamMessage::TraceCompleted {
-        total_nodes: node_count,
-        duration_ms,
-    });
 
     Ok(())
+}
+
+fn handle_connection(mut stream: TcpStream) -> Result<()> {
+    let mut buffer = [0; 1024];
+    stream.read(&mut buffer)?;
+
+    let request = String::from_utf8_lossy(&buffer);
+    let first_line = request.lines().next().unwrap_or("");
+
+    let (status, content_type, body) = if first_line.starts_with("GET /api/health") {
+        ("200 OK", "application/json", get_health_json())
+    } else if first_line.starts_with("GET /") {
+        ("200 OK", "text/html", get_index_html())
+    } else {
+        (
+            "405 Method Not Allowed",
+            "text/plain",
+            "Method not allowed".to_string(),
+        )
+    };
+
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n{body}",
+        body.len()
+    );
+
+    stream.write_all(response.as_bytes())?;
+    stream.flush()?;
+    Ok(())
+}
+
+fn get_health_json() -> String {
+    r#"{"status":"ok","service":"prism"}"#.to_string()
+}
+
+fn get_index_html() -> String {
+    r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prism — Soroban Debugger</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem; background: #f8fafc; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 3rem; }
+        .logo { font-size: 2.5rem; font-weight: bold; color: #1e40af; margin-bottom: 0.5rem; }
+        .subtitle { color: #64748b; font-size: 1.1rem; }
+        .card { background: white; border-radius: 8px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        .card h2 { margin-top: 0; color: #1e293b; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.4rem; font-weight: 500; color: #374151; }
+        input, select { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+        button { background: #1e40af; color: white; padding: 0.6rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+        button:hover { background: #1d4ed8; }
+        .status { padding: 0.75rem 1rem; border-radius: 6px; margin-top: 1rem; display: none; }
+        .status.success { background: #dcfce7; color: #166534; }
+        .status.error { background: #fef2f2; color: #991b1b; }
+        .commands { list-style: none; padding: 0; margin: 0; }
+        .commands li { padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9; color: #475569; }
+        .commands li:last-child { border-bottom: none; }
+        .commands code { background: #f1f5f9; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🔆 Prism</div>
+            <div class="subtitle">Soroban Transaction Debugger</div>
+        </div>
+
+        <div class="card">
+            <h2>Analyze a Transaction</h2>
+            <div class="form-group">
+                <label for="tx-hash">Transaction Hash</label>
+                <input type="text" id="tx-hash" placeholder="64-character hex hash...">
+            </div>
+            <div class="form-group">
+                <label for="network">Network</label>
+                <select id="network">
+                    <option value="testnet">Testnet</option>
+                    <option value="mainnet">Mainnet</option>
+                    <option value="futurenet">Futurenet</option>
+                </select>
+            </div>
+            <button onclick="analyzeTransaction()">Analyze</button>
+            <div id="status" class="status"></div>
+        </div>
+
+        <div class="card">
+            <h2>CLI Commands</h2>
+            <ul class="commands">
+                <li><code>prism decode &lt;hash&gt;</code> — Translate errors into plain English</li>
+                <li><code>prism inspect &lt;hash&gt;</code> — Full transaction context and metadata</li>
+                <li><code>prism trace &lt;hash&gt;</code> — Step-by-step execution replay</li>
+                <li><code>prism profile &lt;hash&gt;</code> — Resource consumption analysis</li>
+                <li><code>prism diff &lt;hash&gt;</code> — State changes before/after</li>
+                <li><code>prism whatif &lt;hash&gt; --modify patch.json</code> — Re-simulate with changes</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function analyzeTransaction() {
+            var txHash = document.getElementById("tx-hash").value;
+            var network = document.getElementById("network").value;
+            var status = document.getElementById("status");
+
+            if (!txHash || txHash.length !== 64) {
+                status.textContent = "Please enter a valid 64-character transaction hash.";
+                status.className = "status error";
+                status.style.display = "block";
+                return;
+            }
+
+            status.textContent = "Run: prism decode " + txHash + " --network " + network;
+            status.className = "status success";
+            status.style.display = "block";
+        }
+    </script>
+</body>
+</html>"#.to_string()
+}
+
+fn open_browser(url: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(url).spawn();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", url])
+            .spawn();
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+    }
 }
