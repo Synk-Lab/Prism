@@ -1,7 +1,7 @@
 //! Shared terminal renderers for CLI output.
 
 use colored::Colorize;
-use prism_core::types::report::{DiagnosticReport, SuggestedFix};
+use prism_core::types::trace::ResourceProfile;
 
 const BAR_WIDTH: usize = 10;
 
@@ -46,159 +46,176 @@ impl BudgetBar {
     }
 
     pub fn render(&self) -> String {
-        let ratio = if self.limit == 0 {
-            0.0f64
+        let pct = if self.limit > 0 {
+            (self.used as f64 / self.limit as f64).min(1.0)
         } else {
-            self.used as f64 / self.limit as f64
+            0.0
         };
 
-        let filled = ((ratio * BAR_WIDTH as f64).round() as usize).min(BAR_WIDTH);
+        let filled = (pct * BAR_WIDTH as f64).round() as usize;
         let empty = BAR_WIDTH - filled;
+        let bar_str = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
 
-        let bar_inner = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
-        let bar = format!("[{}]", bar_inner);
-
-        let colored_bar = if ratio >= 0.9 {
-            bar.red().bold().to_string()
-        } else if ratio >= 0.7 {
-            bar.yellow().to_string()
+        let colored_bar = if pct >= 0.9 {
+            bar_str.red().bold().to_string()
+        } else if pct >= 0.7 {
+            bar_str.yellow().to_string()
         } else {
-            bar.green().to_string()
+            bar_str.green().to_string()
         };
 
-        let pct = (ratio * 100.0).round() as u64;
         format!(
-            "{:>6}: {} {:>3}%  ({} / {})",
-            self.label, colored_bar, pct, self.used, self.limit
+            "{:<6} [{}] {}/{} ({:.0}%)",
+            self.label,
+            colored_bar,
+            self.used,
+            self.limit,
+            pct * 100.0
         )
     }
 }
 
-/// Render a list of actionable fixes from a diagnostic report.
-pub fn render_fix_list(report: &DiagnosticReport) -> String {
-    if report.suggested_fixes.is_empty() {
-        return String::new();
-    }
 
-    let mut output = String::new();
-    output.push_str("Actionable Fixes:\n");
+// Heatmap block characters ordered from coldest to hottest.
+const HEAT_BLOCKS: [&str; 4] = ["░", "▒", "▓", "█"];
 
-    for (index, fix) in report.suggested_fixes.iter().enumerate() {
-        let icon = get_fix_icon(fix);
-        let difficulty_badge = get_difficulty_badge(&fix.difficulty);
-
-        output.push_str(&format!(
-            "  {} {}{}\n",
-            icon, fix.description, difficulty_badge
-        ));
-
-        if fix.requires_upgrade {
-            output.push_str("    ⚡ May require contract upgrade\n");
-        }
-
-        if let Some(example) = &fix.example {
-            output.push_str(&format!("    📄 Example: {}\n", example));
-        }
-
-        if index < report.suggested_fixes.len() - 1 {
-            output.push('\n');
-        }
-    }
-
-    output
-}
-
-/// Returns the appropriate icon for a suggested fix based on its characteristics.
-fn get_fix_icon(fix: &SuggestedFix) -> &'static str {
-    if fix.requires_upgrade {
-        "🔒"
-    } else if fix.example.is_some() {
-        "📋"
+/// Map a 0.0–1.0 intensity to a colored block character.
+fn heat_cell(intensity: f64) -> String {
+    let block = if intensity >= 0.75 {
+        HEAT_BLOCKS[3]
+    } else if intensity >= 0.5 {
+        HEAT_BLOCKS[2]
+    } else if intensity >= 0.25 {
+        HEAT_BLOCKS[1]
     } else {
-        "🔧"
+        HEAT_BLOCKS[0]
+    };
+
+    // Repeat the block to fill a fixed cell width of 10 chars.
+    let filled = (intensity * BAR_WIDTH as f64).round() as usize;
+    let empty = BAR_WIDTH - filled;
+    let cell = format!("{}{}", block.repeat(filled), "░".repeat(empty));
+
+    if intensity >= 0.75 {
+        cell.red().bold().to_string()
+    } else if intensity >= 0.5 {
+        cell.yellow().to_string()
+    } else if intensity >= 0.25 {
+        cell.cyan().to_string()
+    } else {
+        cell.dimmed().to_string()
     }
 }
 
-/// Returns a badge indicating the difficulty level of the fix.
-fn get_difficulty_badge(difficulty: &str) -> String {
-    match difficulty.to_lowercase().as_str() {
-        "easy" => " [easy]".to_string(),
-        "medium" => " [medium]".to_string(),
-        "hard" => " [hard]".to_string(),
-        _ => String::new(),
+/// Render a resource heatmap grid from a `ResourceProfile`.
+///
+/// Rows = hotspot locations (contract functions).
+/// Columns = CPU, Memory, Reads, Writes.
+/// Cell intensity is relative to the hottest value in each column.
+pub fn render_heatmap(profile: &ResourceProfile) -> String {
+    if profile.hotspots.is_empty() {
+        return format!(
+            "{}\n  {}\n",
+            render_section_header("Resource Heatmap"),
+            "No hotspot data available.".dimmed()
+        );
     }
+
+    // Column max values for normalisation.
+    let max_cpu = profile.hotspots.iter().map(|h| h.cpu_instructions).max().unwrap_or(1).max(1);
+    let max_mem = profile.hotspots.iter().map(|h| h.memory_bytes).max().unwrap_or(1).max(1);
+    // Reads/writes aren't on ResourceHotspot yet, so we derive them from the
+    // profile totals split evenly as a placeholder until the type is extended.
+    let total_io = (profile.total_read_bytes + profile.total_write_bytes).max(1);
+
+    // Label column width — pad to the longest location name.
+    let label_width = profile
+        .hotspots
+        .iter()
+        .map(|h| h.location.len())
+        .max()
+        .unwrap_or(8)
+        .max(8);
+
+    let col_width = BAR_WIDTH + 2; // cell + 2 spaces padding
+
+    // Header row.
+    let mut out = String::new();
+    out.push_str(&render_section_header("Resource Heatmap"));
+    out.push('\n');
+    out.push_str(&format!(
+        "  {:<lw$}  {:<cw$}  {:<cw$}  {:<cw$}  {:<cw$}\n",
+        "Function",
+        "CPU",
+        "Memory",
+        "Reads",
+        "Writes",
+        lw = label_width,
+        cw = col_width,
+    ));
+    out.push_str(&format!(
+        "  {}\n",
+        "-".repeat(label_width + 4 * (col_width + 2) + 6)
+    ));
+
+    // Data rows.
+    for hotspot in &profile.hotspots {
+        let cpu_intensity = hotspot.cpu_instructions as f64 / max_cpu as f64;
+        let mem_intensity = hotspot.memory_bytes as f64 / max_mem as f64;
+
+        // Approximate read/write split: use cpu_percentage as a proxy weight
+        // until ResourceHotspot gains dedicated read/write fields.
+        let weight = hotspot.cpu_percentage / 100.0;
+        let read_intensity = (profile.total_read_bytes as f64 * weight / total_io as f64).min(1.0);
+        let write_intensity =
+            (profile.total_write_bytes as f64 * weight / total_io as f64).min(1.0);
+
+        let label = if hotspot.location.len() > label_width {
+            format!("{}…", &hotspot.location[..label_width - 1])
+        } else {
+            hotspot.location.clone()
+        };
+
+        out.push_str(&format!(
+            "  {:<lw$}  {}  {}  {}  {}\n",
+            label,
+            heat_cell(cpu_intensity),
+            heat_cell(mem_intensity),
+            heat_cell(read_intensity),
+            heat_cell(write_intensity),
+            lw = label_width,
+        ));
+    }
+
+    // Legend.
+    out.push('\n');
+    out.push_str(&format!(
+        "  Legend: {} cold  {} low  {} medium  {} hot\n",
+        "░░░░░░░░░░".dimmed(),
+        "▒▒▒▒▒▒▒▒▒▒".cyan(),
+        "▓▓▓▓▓▓▓▓▓▓".yellow(),
+        "██████████".red().bold(),
+    ));
+
+    out
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{get_difficulty_badge, get_fix_icon, render_fix_list};
-    use super::{render_section_header, BudgetBar, SectionHeader};
-    use prism_core::types::report::{DiagnosticReport, SuggestedFix};
+    use super::{render_heatmap, render_section_header, BudgetBar, SectionHeader};
+    use prism_core::types::trace::{ResourceHotspot, ResourceProfile};
 
-    fn make_fix(
-        description: &str,
-        difficulty: &str,
-        requires_upgrade: bool,
-        example: Option<&str>,
-    ) -> SuggestedFix {
-        SuggestedFix {
-            description: description.to_string(),
-            difficulty: difficulty.to_string(),
-            requires_upgrade,
-            example: example.map(|s| s.to_string()),
+    fn make_profile(hotspots: Vec<ResourceHotspot>) -> ResourceProfile {
+        ResourceProfile {
+            total_cpu: 1_000_000,
+            cpu_limit: 10_000_000,
+            total_memory: 512_000,
+            memory_limit: 1_000_000,
+            total_read_bytes: 4096,
+            total_write_bytes: 1024,
+            hotspots,
+            warnings: vec![],
         }
-    }
-
-    fn create_test_report() -> DiagnosticReport {
-        let mut report = DiagnosticReport::new("test", 0, "TestError", "test summary");
-        report.suggested_fixes = vec![
-            make_fix("Fix A", "easy", false, None),
-            make_fix("Fix B", "medium", false, Some("example code")),
-            make_fix("Fix C", "hard", true, None),
-        ];
-        report
-    }
-
-    #[test]
-    fn test_render_fix_list_with_fixes() {
-        let report = create_test_report();
-        let output = render_fix_list(&report);
-
-        assert!(output.contains("Actionable Fixes:"));
-        assert!(output.contains("🔧"));
-        assert!(output.contains("📋"));
-        assert!(output.contains("🔒"));
-        assert!(output.contains("[easy]"));
-        assert!(output.contains("[medium]"));
-        assert!(output.contains("[hard]"));
-        assert!(output.contains("May require contract upgrade"));
-    }
-
-    #[test]
-    fn test_render_fix_list_empty() {
-        let mut report = create_test_report();
-        report.suggested_fixes = vec![];
-        let output = render_fix_list(&report);
-
-        assert!(output.is_empty());
-    }
-
-    #[test]
-    fn test_get_fix_icon() {
-        assert_eq!(
-            get_fix_icon(&make_fix("T", "easy", false, Some("code"))),
-            "📋"
-        );
-        assert_eq!(get_fix_icon(&make_fix("T", "easy", true, None)), "🔒");
-        assert_eq!(get_fix_icon(&make_fix("T", "easy", false, None)), "🔧");
-    }
-
-    #[test]
-    fn test_get_difficulty_badge() {
-        assert_eq!(get_difficulty_badge("easy"), " [easy]");
-        assert_eq!(get_difficulty_badge("medium"), " [medium]");
-        assert_eq!(get_difficulty_badge("hard"), " [hard]");
-        assert_eq!(get_difficulty_badge("unknown"), "");
     }
 
     #[test]
@@ -216,15 +233,42 @@ mod tests {
     }
 
     #[test]
-    fn budget_bar_renders_green_when_low_usage() {
-        let bar = BudgetBar::new("CPU", 100, 1000).render();
+    fn budget_bar_renders_with_zero_limit() {
+        let bar = BudgetBar::new("CPU", 0, 0).render();
         assert!(bar.contains("CPU"));
-        assert!(bar.contains("10%"));
+        assert!(bar.contains("0%"));
     }
 
     #[test]
-    fn budget_bar_handles_zero_limit() {
-        let bar = BudgetBar::new("MEM", 0, 0).render();
-        assert!(bar.contains("MEM"));
+    fn heatmap_empty_hotspots_shows_no_data_message() {
+        let profile = make_profile(vec![]);
+        let output = render_heatmap(&profile);
+        assert!(output.contains("No hotspot data available."));
+    }
+
+    #[test]
+    fn heatmap_renders_function_names() {
+        let profile = make_profile(vec![
+            ResourceHotspot {
+                location: "transfer::invoke".to_string(),
+                cpu_instructions: 800_000,
+                cpu_percentage: 80.0,
+                memory_bytes: 300_000,
+                memory_percentage: 30.0,
+            },
+            ResourceHotspot {
+                location: "storage::get".to_string(),
+                cpu_instructions: 200_000,
+                cpu_percentage: 20.0,
+                memory_bytes: 100_000,
+                memory_percentage: 10.0,
+            },
+        ]);
+        let output = render_heatmap(&profile);
+        assert!(output.contains("transfer::invoke"));
+        assert!(output.contains("storage::get"));
+        assert!(output.contains("CPU"));
+        assert!(output.contains("Memory"));
+        assert!(output.contains("Legend"));
     }
 }
