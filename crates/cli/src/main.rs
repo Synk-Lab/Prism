@@ -16,6 +16,9 @@ mod output;
 mod tui;
 
 use clap::{Parser, Subcommand};
+use clap::CommandFactory;
+use clap_complete::{generate, Shell};
+use std::io;
 
 /// Prism — From cryptic error to root cause in one command.
 #[derive(Parser)]
@@ -59,6 +62,11 @@ enum Commands {
     Export(commands::export::ExportArgs),
     /// Manage the error taxonomy database.
     Db(commands::db::DbArgs),
+    /// Generate shell completion scripts.
+    Completions {
+        /// The shell to generate completions for.
+        shell: Shell,
+    },
 }
 
 #[tokio::main]
@@ -85,6 +93,10 @@ async fn main() -> anyhow::Result<()> {
         Commands::Whatif(args) => commands::whatif::run(args, &network, &cli.output).await?,
         Commands::Export(args) => commands::export::run(args, &network).await?,
         Commands::Db(args) => commands::db::run(args).await?,
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "prism", &mut io::stdout());
+        }
     }
 
     Ok(())

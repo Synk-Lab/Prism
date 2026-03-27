@@ -18,8 +18,8 @@ description = "Soroban Transaction Debugger — From cryptic error to root cause
 stellar-xdr = { version = "21", features = ["std", "serde"] }
 stellar-strkey = "0.0.9"
 soroban-env-host = "21"
-soroban-spec = "21"
-soroban-spec-tools = "21"
+soroban-spec = "=21.1.0-rc.1"
+soroban-spec-tools = "21.0.0"
 
 # Networking & Serialization
 reqwest = { version = "0.12", features = ["json", "gzip"] }
