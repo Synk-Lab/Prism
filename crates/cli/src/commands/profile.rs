@@ -17,7 +17,6 @@ pub async fn run(
     args: ProfileArgs,
     network: &NetworkConfig,
     output_format: &str,
-    save: Option<&str>,
 ) -> anyhow::Result<()> {
     let progress = indicatif::ProgressBar::new_spinner();
     progress.set_message("Replaying transaction for resource profiling...");

@@ -87,12 +87,12 @@ pub async fn decode_transaction_with_op_filter(
 
     // 5. If it's a contract error, resolve via contract spec
     if error_info.is_contract_error {
-        if
-            let Ok(contract_info) = contract_error::resolve(
-                &error_info.contract_id.unwrap_or_default(),
-                error_info.error_code,
-                network
-            ).await
+        if let Ok(contract_info) = contract_error::resolve(
+            &error_info.contract_id.unwrap_or_default(),
+            error_info.error_code,
+            network,
+        )
+        .await
         {
             report.contract_error = Some(contract_info);
         }

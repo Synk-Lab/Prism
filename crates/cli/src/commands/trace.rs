@@ -26,7 +26,6 @@ pub async fn run(
     args: TraceArgs,
     network: &NetworkConfig,
     output_format: &str,
-    save: Option<&str>,
 ) -> anyhow::Result<()> {
     let progress = indicatif::ProgressBar::new_spinner();
     progress.set_message("Reconstructing state and replaying transaction...");

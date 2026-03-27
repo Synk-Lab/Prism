@@ -17,9 +17,10 @@ pub async fn run(
     args: WhatifArgs,
     network: &NetworkConfig,
     output_format: &str,
-    save: Option<&str>,
 ) -> anyhow::Result<()> {
-    let patches = if let Some(patch_file) = &args.modify {
+    println!("What-if simulation for {}", args.tx_hash);
+
+    if let Some(patch_file) = &args.modify {
         let patch_content = std::fs::read_to_string(patch_file)?;
         let patches: Vec<prism_core::debugger::whatif::WhatIfPatch> =
             serde_json::from_str(&patch_content)?;

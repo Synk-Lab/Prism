@@ -96,11 +96,8 @@ enum Commands {
     /// Export debug session as a regression test.
     #[command(subcommand_help_heading = "Development Tools")]
     Export(commands::export::ExportArgs),
-
-    /// Launch Web UI dashboard.
-    #[command(subcommand_help_heading = "Development Tools")]
+    /// Start the local JSON-RPC bridge for the Web dashboard.
     Serve(commands::serve::ServeArgs),
-
     /// Clear local cache data.
     #[command(subcommand_help_heading = "Configuration & Maintenance")]
     Clean(commands::clean::CleanArgs),
@@ -108,6 +105,10 @@ enum Commands {
     /// Manage the error taxonomy database.
     #[command(subcommand_help_heading = "Configuration & Maintenance")]
     Db(commands::db::DbArgs),
+
+    /// Run a self-test: binary version, network connectivity, and cache health.
+    #[command(subcommand_help_heading = "Configuration & Maintenance")]
+    Diagnostic(commands::diagnostic::DiagnosticArgs),
 }
 
 #[tokio::main]
@@ -161,9 +162,11 @@ async fn main() -> anyhow::Result<()> {
         Commands::Whatif(args) => commands::whatif::run(args, &network, &cli.output, save).await?,
         Commands::Replay(args) => commands::replay::run(args, &network).await?,
         Commands::Export(args) => commands::export::run(args, &network).await?,
+        Commands::Serve(args) => commands::serve::run(args, &network).await?,
         Commands::Clean(args) => commands::clean::run(args).await?,
         Commands::Db(args) => commands::db::run(args).await?,
         Commands::Serve(args) => commands::serve::run(args).await?,
+        Commands::Diagnostic(args) => commands::diagnostic::run(args).await?,
     }
 
     Ok(())
@@ -224,11 +227,10 @@ mod tests {
     }
 
     #[test]
-    fn parses_short_output_alias() {
-        let cli = Cli::try_parse_from(["prism", "--output", "short", "decode", "abc123"]).expect(
-            "cli should parse"
-        );
-        assert_eq!(cli.output, "short");
+    fn parses_serve_subcommand() {
+        let cli =
+            Cli::try_parse_from(["prism", "serve", "--port", "4040"]).expect("cli should parse");
+        assert!(matches!(cli.command, Commands::Serve(_)));
     }
 
     #[test]
