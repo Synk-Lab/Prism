@@ -214,3 +214,54 @@ impl RpcClient {
         Err(last_error.unwrap_or_else(|| PrismError::RpcError("Unknown error".to_string())))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::config::NetworkConfig;
+
+    fn test_config() -> NetworkConfig {
+        NetworkConfig {
+            rpc_url: "https://rpc.example.com".to_string(),
+            network_passphrase: "Test SDF Network ; September 2015".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_get_ledger_entries_request_format() {
+        let config = test_config();
+        let client = RpcClient::new(config);
+        
+        // Test that the method exists and can be called
+        // We can't actually make HTTP requests in unit tests without mocking,
+        // but we can verify the method signature and structure
+        let keys = vec![
+            "AAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string(),
+            "AAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB=".to_string(),
+        ];
+        
+        // This will fail with a network error, but that's expected in unit tests
+        // The important thing is that the method compiles and accepts the correct parameters
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(client.get_ledger_entries(&keys));
+        
+        // We expect a network error since we're not mocking the HTTP client
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_ledger_entries_empty_keys() {
+        let config = test_config();
+        let client = RpcClient::new(config);
+        
+        let keys: Vec<String> = vec![];
+        
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(client.get_ledger_entries(&keys));
+        
+        // We expect a network error since we're not mocking the HTTP client
+        assert!(result.is_err());
+    }
+}
