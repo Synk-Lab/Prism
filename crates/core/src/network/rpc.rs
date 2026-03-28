@@ -14,6 +14,80 @@ use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
+// ── simulateTransaction response types ──────────────────────────────────────
+
+/// Ledger footprint returned by `simulateTransaction`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulateFootprint {
+    #[serde(rename = "readOnly", default)]
+    pub read_only: Vec<String>,
+    #[serde(rename = "readWrite", default)]
+    pub read_write: Vec<String>,
+}
+
+/// Authorization entry returned by `simulateTransaction`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulateAuthEntry {
+    pub xdr: String,
+}
+
+/// Resource cost estimates returned by `simulateTransaction`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulateCost {
+    #[serde(rename = "cpuInsns", default)]
+    pub cpu_insns: String,
+    #[serde(rename = "memBytes", default)]
+    pub mem_bytes: String,
+}
+
+/// Soroban resource limits and fees returned by `simulateTransaction`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulateSorobanData {
+    pub data: String,
+    #[serde(rename = "minResourceFee")]
+    pub min_resource_fee: String,
+}
+
+/// Typed response from the `simulateTransaction` RPC method.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulateTransactionResponse {
+    #[serde(rename = "latestLedger")]
+    pub latest_ledger: u32,
+    #[serde(rename = "transactionData", default)]
+    pub soroban_data: Option<String>,
+    #[serde(rename = "minResourceFee", default)]
+    pub min_resource_fee: Option<String>,
+    #[serde(default)]
+    pub auth: Vec<String>,
+    #[serde(default)]
+    pub results: Vec<SimulateResult>,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub events: Vec<String>,
+    #[serde(default)]
+    pub cost: Option<SimulateCost>,
+}
+
+/// Invocations result in a `simulateTransaction` response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulateResult {
+    #[serde(default)]
+    pub xdr: String,
+    #[serde(default)]
+    pub auth: Vec<String>,
+}
+
+impl SimulateTransactionResponse {
+    pub fn is_success(&self) -> bool {
+        self.error.is_none()
+    }
+
+    pub fn return_value_xdr(&self) -> Option<&str> {
+        self.results.first().map(|r| r.xdr.as_str())
+    }
+}
+
 /// Primary entry point for Soroban network communication.
 #[derive(Debug, Clone)]
 pub struct SorobanRpcClient {
@@ -97,12 +171,44 @@ impl SorobanRpcClient {
         self.call("getTransaction", params).await
     }
 
-    /// Simulate a transaction given its XDR envelope.
-    pub async fn simulate_transaction(&self, tx_xdr: &str) -> PrismResult<serde_json::Value> {
-        let params = serde_json::json!({
-            "transaction": tx_xdr,
-        });
-        self.call("simulateTransaction", params).await
+    /// Simulate a transaction against the current ledger state.
+    ///
+    /// Fires the `simulateTransaction` JSON-RPC method and returns a typed
+    /// [`SimulateTransactionResponse`] containing:
+    /// - `soroban_data` — the `SorobanTransactionData` XDR to stamp onto the
+    ///   transaction before submission (footprint + resource limits).
+    /// - `min_resource_fee` — the minimum fee in stroops required.
+    /// - `auth` — authorization entries that must be signed by the relevant
+    ///   parties before the transaction is submitted.
+    /// - `results` — per-invocation return values.
+    ///
+    /// If the node returns an `error` field the method returns
+    /// [`PrismError::RpcError`] so callers can surface the simulation failure
+    /// without having to inspect the raw JSON.
+    ///
+    /// # Arguments
+    /// * `tx_xdr` — base64-encoded XDR of the unsigned `TransactionEnvelope`.
+    pub async fn simulate_transaction(
+        &self,
+        tx_xdr: &str,
+    ) -> PrismResult<SimulateTransactionResponse> {
+        let params = serde_json::json!({ "transaction": tx_xdr });
+        let raw = self.call::<serde_json::Value>("simulateTransaction", params).await?;
+
+        let response: SimulateTransactionResponse =
+            serde_json::from_value(raw).map_err(|e| {
+                PrismError::RpcError(format!("Failed to parse simulateTransaction response: {e}"))
+            })?;
+
+        // Surface simulation-level errors as a proper Rust error so callers
+        // don't need to inspect the struct themselves.
+        if let Some(ref err) = response.error {
+            return Err(PrismError::RpcError(format!(
+                "simulateTransaction failed: {err}"
+            )));
+        }
+
+        Ok(response)
     }
 
     /// Fetch ledger entries by their XDR keys.
