@@ -30,16 +30,55 @@ struct JsonRpcRequest<'a, P: Serialize> {
 
 /// JSON-RPC response envelope.
 #[derive(Debug, Deserialize)]
-struct JsonRpcResponse<R> {
+struct JsonRpcResponse<T> {
     #[allow(dead_code)]
     jsonrpc: String,
     #[allow(dead_code)]
     id: u64,
-    result: Option<R>,
+    result: Option<T>,
     error: Option<JsonRpcError>,
 }
 
-/// JSON-RPC error object.
+/// Transaction status in Soroban.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TransactionStatus {
+    Success,
+    NotFound,
+    Failed,
+}
+
+/// Response for the `getTransaction` RPC method.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransactionResponse {
+    /// Status of the transaction.
+    pub status: TransactionStatus,
+    /// Latest ledger known to the RPC node.
+    pub latest_ledger: u32,
+    /// Latest ledger close time known to the RPC node.
+    pub latest_ledger_close_time: Option<u64>,
+    /// Oldest ledger known to the RPC node.
+    pub oldest_ledger: Option<u32>,
+    /// Oldest ledger close time known to the RPC node.
+    pub oldest_ledger_close_time: Option<u64>,
+    /// The ledger in which the transaction was included.
+    pub ledger: Option<u32>,
+    /// The creation time of the transaction.
+    pub created_at: Option<String>,
+    /// The order in which the transaction was applied in the ledger.
+    pub application_order: Option<u32>,
+    /// Fee bump information if applicable.
+    pub fee_bump: Option<String>,
+    /// Envelope XDR for the transaction.
+    pub envelope_xdr: Option<String>,
+    /// Result XDR for the transaction.
+    pub result_xdr: Option<String>,
+    /// Result Meta XDR for the transaction.
+    pub result_meta_xdr: Option<String>,
+}
+
+/// JSON-RPC error.
 #[derive(Debug, Deserialize)]
 struct JsonRpcError {
     #[allow(dead_code)]
@@ -97,23 +136,24 @@ impl SorobanRpcClient {
 
     /// Fetch a transaction by hash.
     pub async fn get_transaction(&self, tx_hash: &str) -> PrismResult<GetTransactionResponse> {
-        self.request("getTransaction", serde_json::json!([tx_hash]))
-            .await
+        let params = serde_json::json!([tx_hash]);
+        self.call("getTransaction", params).await
     }
 
     /// Simulate a transaction given its XDR envelope.
     pub async fn simulate_transaction(&self, tx_xdr: &str) -> PrismResult<serde_json::Value> {
-        self.request(
-            "simulateTransaction",
-            serde_json::json!({ "transaction": tx_xdr }),
-        )
-        .await
+        let params = serde_json::json!({
+            "transaction": tx_xdr,
+        });
+        self.call::<serde_json::Value>("simulateTransaction", params).await
     }
 
     /// Fetch ledger entries by their XDR keys.
     pub async fn get_ledger_entries(&self, keys: &[String]) -> PrismResult<serde_json::Value> {
-        self.request("getLedgerEntries", serde_json::json!({ "keys": keys }))
-            .await
+        let params = serde_json::json!({
+            "keys": keys,
+        });
+        self.call::<serde_json::Value>("getLedgerEntries", params).await
     }
 
     /// Query events starting from `start_ledger` with the given filters.
@@ -122,29 +162,25 @@ impl SorobanRpcClient {
         start_ledger: u32,
         filters: serde_json::Value,
     ) -> PrismResult<serde_json::Value> {
-        self.request(
-            "getEvents",
-            serde_json::json!({ "startLedger": start_ledger, "filters": filters }),
-        )
-        .await
+        let params = serde_json::json!({
+            "startLedger": start_ledger,
+            "filters": filters,
+        });
+        self.call::<serde_json::Value>("getEvents", params).await
     }
 
     /// Return the latest ledger info from the RPC node.
     pub async fn get_latest_ledger(&self) -> PrismResult<serde_json::Value> {
-        self.request("getLatestLedger", serde_json::json!({})).await
+        self.call::<serde_json::Value>("getLatestLedger", serde_json::json!({})).await
     }
 
-    /// Generic async JSON-RPC transport with exponential-backoff retry.
-    ///
-    /// Serialises `params` into a JSON-RPC 2.0 envelope, POSTs it to
-    /// `self.rpc_url`, and deserialises the `result` field into `R`.
-    /// Retries up to 3 times on transport errors or HTTP 429 responses.
-    async fn request<P, R>(&self, method: &str, params: P) -> PrismResult<R>
-    where
-        P: Serialize,
-        R: for<'de> Deserialize<'de>,
-    {
-        let envelope = JsonRpcRequest {
+    /// Internal JSON-RPC call with retry logic.
+    async fn call<T: for<'de> Deserialize<'de>>(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> PrismResult<T> {
+        let request = JsonRpcRequest {
             jsonrpc: "2.0",
             id: 1,
             method,
@@ -188,12 +224,17 @@ impl SorobanRpcClient {
                         continue;
                     }
 
-                    let rpc_resp: JsonRpcResponse<R> =
-                        serde_json::from_str(&body).map_err(|e| {
-                            PrismError::RpcError(format!("Failed to parse RPC response: {e}"))
-                        })?;
+                    let rpc_response: JsonRpcResponse<T> = serde_json::from_str(&response_body)
+                        .map_err(|e| PrismError::RpcError(format!("Response parse error: {e}")))?;
 
-                    if let Some(err) = rpc_resp.error {
+                    if let Some(err) = rpc_response.error {
+                        tracing::debug!(
+                            method,
+                            endpoint = %self.config.rpc_url,
+                            attempt,
+                            error = %err.message,
+                            "RPC returned an error response"
+                        );
                         return Err(PrismError::RpcError(err.message));
                     }
 
@@ -260,5 +301,49 @@ mod tests {
             let got: TransactionStatus = serde_json::from_str(raw).unwrap();
             assert_eq!(got, expected);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_transaction_deserialization() {
+        let response_json = r#"{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "status": "SUCCESS",
+                "latestLedger": 123,
+                "latestLedgerCloseTime": 1711620000,
+                "ledger": 120,
+                "createdAt": "2024-03-28T10:00:00Z",
+                "applicationOrder": 1,
+                "envelopeXdr": "AAAAAg...",
+                "resultXdr": "AAAAAw...",
+                "resultMetaXdr": "AAAABA..."
+            }
+        }"#;
+
+        let rpc_response: JsonRpcResponse<GetTransactionResponse> =
+            serde_json::from_str(response_json).unwrap();
+        let result = rpc_response.result.unwrap();
+
+        assert_eq!(result.status, TransactionStatus::Success);
+        assert_eq!(result.latest_ledger, 123);
+        assert_eq!(result.ledger, Some(120));
+    }
+
+    #[test]
+    fn test_transaction_status_enum() {
+        let status: TransactionStatus = serde_json::from_str("\"SUCCESS\"").unwrap();
+        assert_eq!(status, TransactionStatus::Success);
+
+        let status: TransactionStatus = serde_json::from_str("\"NOT_FOUND\"").unwrap();
+        assert_eq!(status, TransactionStatus::NotFound);
+
+        let status: TransactionStatus = serde_json::from_str("\"FAILED\"").unwrap();
+        assert_eq!(status, TransactionStatus::Failed);
     }
 }
