@@ -20,60 +20,15 @@ impl Default for Network {
 }
 
 impl Network {
-    /// Return the canonical network passphrase for this network.
-    ///
-    /// These strings are used when signing and verifying Stellar transactions —
-    /// they must match exactly what the network nodes expect.
-    pub fn passphrase(&self) -> &'static str {
+    /// Returns the default Soroban RPC URL for preset networks.
+    pub fn default_rpc_url(&self) -> &str {
         match self {
-            Self::Mainnet => "Public Global Stellar Network ; September 2015",
-            Self::Testnet => "Test SDF Network ; September 2015",
-            Self::Futurenet => "Test SDF Future Network ; October 2022",
-            Self::Standalone => "Standalone Network ; February 2017",
-            Self::Custom => "",
+            Network::Mainnet => "https://soroban-mainnet.stellar.org",
+            Network::Testnet => "https://soroban-testnet.stellar.org",
+            Network::Futurenet => "https://rpc-futurenet.stellar.org",
+            Network::Standalone => "",
+            Network::Custom => "",
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn passphrase_mainnet() {
-        assert_eq!(
-            Network::Mainnet.passphrase(),
-            "Public Global Stellar Network ; September 2015"
-        );
-    }
-
-    #[test]
-    fn passphrase_testnet() {
-        assert_eq!(
-            Network::Testnet.passphrase(),
-            "Test SDF Network ; September 2015"
-        );
-    }
-
-    #[test]
-    fn passphrase_futurenet() {
-        assert_eq!(
-            Network::Futurenet.passphrase(),
-            "Test SDF Future Network ; October 2022"
-        );
-    }
-
-    #[test]
-    fn passphrase_standalone() {
-        assert_eq!(
-            Network::Standalone.passphrase(),
-            "Standalone Network ; February 2017"
-        );
-    }
-
-    #[test]
-    fn passphrase_custom_is_empty() {
-        assert_eq!(Network::Custom.passphrase(), "");
     }
 }
 
@@ -161,5 +116,19 @@ impl Default for PrismConfig {
             cache_dir: None,
             max_cache_size_mb: 512,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_rpc_url() {
+        assert_eq!(Network::Mainnet.default_rpc_url(), "https://soroban-mainnet.stellar.org");
+        assert_eq!(Network::Testnet.default_rpc_url(), "https://soroban-testnet.stellar.org");
+        assert_eq!(Network::Futurenet.default_rpc_url(), "https://rpc-futurenet.stellar.org");
+        assert_eq!(Network::Standalone.default_rpc_url(), "");
+        assert_eq!(Network::Custom.default_rpc_url(), "");
     }
 }
