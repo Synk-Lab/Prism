@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Prism CLI — Soroban Transaction Debugger"
+build = "build.rs"
 
 [[bin]]
 name = "prism"
@@ -11,17 +12,23 @@ path = "src/main.rs"
 
 [dependencies]
 prism-core = { workspace = true }
+fs2     = "0.4"
+walkdir = "2"
 
 # CLI Framework
 clap = { workspace = true }
+clap_complete = "4"
 anyhow = { workspace = true }
 colored = { workspace = true }
 indicatif = { workspace = true }
 dialoguer = { workspace = true }
 tabled = { workspace = true }
+termcolor = { workspace = true }
 
 # Async
 tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
@@ -35,9 +42,17 @@ rpassword = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 
+# Paths
+directories = { workspace = true }
+
 # Logging
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+
+semver = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5.0"
+url = "2"
 
 [dev-dependencies]
 assert_cmd = "2"

@@ -6,14 +6,28 @@ use prism_core::types::config::NetworkConfig;
 #[derive(Args)]
 pub struct TraceArgs {
     /// Transaction hash to trace.
+    #[arg(index = 1, value_name = "TX_HASH")]
     pub tx_hash: String,
 
     /// Output trace to a file instead of stdout.
     #[arg(long, short)]
     pub output_file: Option<String>,
+
+    /// Show authorization tree view.
+    #[arg(long)]
+    pub auth: bool,
+
+    /// Show only authorization structure.
+    #[arg(long)]
+    pub auth_only: bool,
 }
 
-pub async fn run(args: TraceArgs, network: &NetworkConfig, output_format: &str) -> anyhow::Result<()> {
+pub async fn run(
+    args: TraceArgs,
+    network: &NetworkConfig,
+    output_format: &str,
+    save: Option<&str>,
+) -> anyhow::Result<()> {
     let progress = indicatif::ProgressBar::new_spinner();
     progress.set_message("Reconstructing state and replaying transaction...");
     progress.enable_steady_tick(std::time::Duration::from_millis(100));
@@ -22,9 +36,14 @@ pub async fn run(args: TraceArgs, network: &NetworkConfig, output_format: &str) 
 
     progress.finish_and_clear();
 
-    let output = match output_format {
-        "json" => serde_json::to_string_pretty(&trace)?,
-        _ => format!("{trace:#?}"),
+    let output = if args.auth || args.auth_only {
+        if args.auth_only {
+            crate::output::auth_tree::render_auth_only(&trace)?
+        } else {
+            crate::output::auth_tree::render_auth_tree(&trace)?
+        }
+    } else {
+        crate::output::format_trace(&trace, output_format)?
     };
 
     if let Some(path) = args.output_file {
@@ -34,5 +53,11 @@ pub async fn run(args: TraceArgs, network: &NetworkConfig, output_format: &str) 
         println!("{output}");
     }
 
+    if let Some(path) = save {
+        let json = serde_json::to_string_pretty(&trace)?;
+        std::fs::write(path, &json)
+            .map_err(|e| anyhow::anyhow!("Failed to write save file '{}': {}", path, e))?;
+        eprintln!("Saved trace to {path}");
+    }
     Ok(())
 }

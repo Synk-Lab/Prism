@@ -35,6 +35,7 @@ pub struct CacheStore {
     /// Path to the cache directory.
     cache_dir: PathBuf,
     /// Maximum cache size in bytes.
+    #[allow(dead_code)]
     max_size: u64,
 }
 
@@ -52,14 +53,23 @@ impl CacheStore {
 
     /// Create a cache store using platform-appropriate default directories.
     pub fn default_location() -> PrismResult<Self> {
-        let project_dirs = directories::ProjectDirs::from("dev", "prism", "prism")
-            .ok_or_else(|| PrismError::CacheError("Could not determine cache directory".to_string()))?;
+        let project_dirs =
+            directories::ProjectDirs::from("dev", "prism", "prism").ok_or_else(|| {
+                PrismError::CacheError("Could not determine cache directory".to_string())
+            })?;
 
         Self::new(project_dirs.cache_dir().to_path_buf(), 512)
     }
 
     /// Store a value in the cache with a content-addressed key.
     pub fn put(&self, category: CacheCategory, key: &str, value: &[u8]) -> PrismResult<()> {
+        if value.len() as u64 > self.max_size {
+            return Err(PrismError::CacheError(format!(
+                "Cache entry exceeds configured cache size limit of {} bytes",
+                self.max_size
+            )));
+        }
+
         let path = self.entry_path(category, key);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
@@ -91,8 +101,9 @@ impl CacheStore {
     pub fn remove(&self, category: CacheCategory, key: &str) -> PrismResult<()> {
         let path = self.entry_path(category, key);
         if path.exists() {
-            std::fs::remove_file(&path)
-                .map_err(|e| PrismError::CacheError(format!("Failed to remove cache entry: {e}")))?;
+            std::fs::remove_file(&path).map_err(|e| {
+                PrismError::CacheError(format!("Failed to remove cache entry: {e}"))
+            })?;
         }
         Ok(())
     }
@@ -102,8 +113,9 @@ impl CacheStore {
         if self.cache_dir.exists() {
             std::fs::remove_dir_all(&self.cache_dir)
                 .map_err(|e| PrismError::CacheError(format!("Failed to clear cache: {e}")))?;
-            std::fs::create_dir_all(&self.cache_dir)
-                .map_err(|e| PrismError::CacheError(format!("Failed to recreate cache dir: {e}")))?;
+            std::fs::create_dir_all(&self.cache_dir).map_err(|e| {
+                PrismError::CacheError(format!("Failed to recreate cache dir: {e}"))
+            })?;
         }
         Ok(())
     }
@@ -123,7 +135,9 @@ mod tests {
         let dir = std::env::temp_dir().join("prism_test_cache");
         let store = CacheStore::new(dir.clone(), 10).unwrap();
 
-        store.put(CacheCategory::WasmBlob, "test_key", b"hello").unwrap();
+        store
+            .put(CacheCategory::WasmBlob, "test_key", b"hello")
+            .unwrap();
         let result = store.get(CacheCategory::WasmBlob, "test_key").unwrap();
         assert_eq!(result, Some(b"hello".to_vec()));
 

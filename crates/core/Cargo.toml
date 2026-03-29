@@ -17,14 +17,14 @@ wasm-compat = []
 # Stellar / Soroban
 stellar-xdr = { workspace = true }
 stellar-strkey = { workspace = true }
-soroban-spec = { workspace = true }
-soroban-spec-tools = { workspace = true }
+soroban-env-host = { workspace = true }
 
 # Networking
 reqwest = { workspace = true }
 tokio = { workspace = true }
 
 # Serialization
+base64 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }

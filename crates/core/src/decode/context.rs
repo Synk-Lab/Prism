@@ -17,10 +17,7 @@ pub fn enrich_report(
         .unwrap_or("unknown")
         .to_string();
 
-    let ledger_sequence = tx_data
-        .get("ledger")
-        .and_then(|l| l.as_u64())
-        .unwrap_or(0) as u32;
+    let ledger_sequence = tx_data.get("ledger").and_then(|l| l.as_u64()).unwrap_or(0) as u32;
 
     let context = TransactionContext {
         tx_hash,
@@ -58,15 +55,27 @@ fn extract_arguments(tx_data: &serde_json::Value) -> Vec<String> {
 fn extract_fee_breakdown(tx_data: &serde_json::Value) -> FeeBreakdown {
     // TODO: Parse actual fee components from the transaction
     FeeBreakdown {
-        inclusion_fee: tx_data.get("inclusionFee").and_then(|f| f.as_i64()).unwrap_or(0),
-        resource_fee: tx_data.get("resourceFee").and_then(|f| f.as_i64()).unwrap_or(0),
-        refundable_fee: tx_data.get("refundableFee").and_then(|f| f.as_i64()).unwrap_or(0),
-        non_refundable_fee: tx_data.get("nonRefundableFee").and_then(|f| f.as_i64()).unwrap_or(0),
+        inclusion_fee: tx_data
+            .get("inclusionFee")
+            .and_then(|f| f.as_i64())
+            .unwrap_or(0),
+        resource_fee: tx_data
+            .get("resourceFee")
+            .and_then(|f| f.as_i64())
+            .unwrap_or(0),
+        refundable_fee: tx_data
+            .get("refundableFee")
+            .and_then(|f| f.as_i64())
+            .unwrap_or(0),
+        non_refundable_fee: tx_data
+            .get("nonRefundableFee")
+            .and_then(|f| f.as_i64())
+            .unwrap_or(0),
     }
 }
 
 /// Extract resource usage summary.
-fn extract_resource_summary(tx_data: &serde_json::Value) -> ResourceSummary {
+fn extract_resource_summary(_tx_data: &serde_json::Value) -> ResourceSummary {
     // TODO: Parse actual resource usage from the transaction result
     ResourceSummary {
         cpu_instructions_used: 0,

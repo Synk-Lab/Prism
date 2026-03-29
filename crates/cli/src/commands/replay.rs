@@ -13,14 +13,18 @@ pub struct ReplayArgs {
     pub interactive: bool,
 }
 
-pub async fn run(args: ReplayArgs, network: &NetworkConfig) -> anyhow::Result<()> {
+pub async fn run(args: ReplayArgs, network: &NetworkConfig, quiet: &bool) -> anyhow::Result<()> {
     if args.interactive {
-        println!("Launching interactive TUI debugger for {}...", args.tx_hash);
-        // TODO: Launch the ratatui TUI application
+        if !*quiet {
+            println!("Launching interactive TUI debugger for {}...", args.tx_hash);
+        }
         crate::tui::app::launch(&args.tx_hash, network).await?;
-    } else {
+    } else if !*quiet {
         println!("Use --interactive / -i to launch the TUI debugger.");
-        println!("Or use `prism trace {}` for non-interactive trace output.", args.tx_hash);
+        println!(
+            "Or use `prism trace {}` for non-interactive trace output.",
+            args.tx_hash
+        );
     }
 
     Ok(())
