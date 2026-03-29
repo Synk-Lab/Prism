@@ -61,21 +61,90 @@ fn hex_decode(input: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Trait for convenient XDR encoding/decoding of Stellar XDR types.
+///
+/// This trait provides a unified interface for serializing and deserializing
+/// Stellar XDR types to/from raw bytes and base64-encoded strings. It wraps
+/// the underlying `stellar-xdr` crate's `ReadXdr` and `WriteXdr` traits with
+/// error handling and base64 support.
+///
+/// # Examples
+///
+/// ```rust
+/// use prism_core::xdr::codec::XdrCodec;
+/// use stellar_xdr::LedgerEntry;
+///
+/// // Assuming you have a LedgerEntry instance
+/// let entry: LedgerEntry = /* ... */;
+///
+/// // Serialize to bytes
+/// let bytes = entry.to_xdr_bytes()?;
+///
+/// // Deserialize from bytes
+/// let decoded = LedgerEntry::from_xdr_bytes(&bytes)?;
+///
+/// // Serialize to base64
+/// let base64 = entry.to_xdr_base64()?;
+///
+/// // Deserialize from base64
+/// let decoded = LedgerEntry::from_xdr_base64(&base64)?;
+/// ```
 pub trait XdrCodec: Sized {
+    /// Deserialize from XDR-encoded bytes.
+    ///
+    /// # Arguments
+    /// * `bytes` - Raw XDR-encoded byte slice
+    ///
+    /// # Returns
+    /// The deserialized instance
+    ///
+    /// # Errors
+    /// Returns `PrismError::XdrError` if deserialization fails
     fn from_xdr_bytes(bytes: &[u8]) -> PrismResult<Self>;
 
+    /// Serialize to XDR-encoded bytes.
+    ///
+    /// # Returns
+    /// The XDR-encoded bytes
+    ///
+    /// # Errors
+    /// Returns `PrismError::XdrError` if serialization fails
     fn to_xdr_bytes(&self) -> PrismResult<Vec<u8>>;
 
+    /// Deserialize from base64-encoded XDR string.
+    ///
+    /// # Arguments
+    /// * `xdr_base64` - Base64-encoded XDR string
+    ///
+    /// # Returns
+    /// The deserialized instance
+    ///
+    /// # Errors
+    /// Returns `PrismError::XdrError` if base64 decoding or XDR deserialization fails
     fn from_xdr_base64(xdr_base64: &str) -> PrismResult<Self> {
         let bytes = decode_xdr_base64(xdr_base64)?;
         Self::from_xdr_bytes(&bytes)
     }
 
+    /// Serialize to base64-encoded XDR string.
+    ///
+    /// # Returns
+    /// The base64-encoded XDR string
+    ///
+    /// # Errors
+    /// Returns `PrismError::XdrError` if XDR serialization or base64 encoding fails
     fn to_xdr_base64(&self) -> PrismResult<String> {
         Ok(encode_xdr_base64(&self.to_xdr_bytes()?))
     }
 }
 
+/// Implementation of XdrCodec for stellar_xdr::LedgerEntry.
+///
+/// Provides reliable XDR serialization and deserialization for Stellar LedgerEntry
+/// objects, which represent the state of accounts, trustlines, and contracts.
+/// This is essential for State Archive handling and RPC responses.
+///
+/// The implementation uses the underlying stellar-xdr crate's ReadXdr and WriteXdr
+/// traits with proper error mapping to PrismError.
 impl XdrCodec for stellar_xdr::LedgerEntry {
     fn from_xdr_bytes(bytes: &[u8]) -> PrismResult<Self> {
         stellar_xdr::LedgerEntry::from_xdr(bytes, stellar_xdr::Limits::none())
