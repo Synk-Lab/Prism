@@ -91,7 +91,9 @@ impl SimulateTransactionResponse {
 /// Primary entry point for Soroban network communication.
 #[derive(Debug, Clone)]
 pub struct SorobanRpcClient {
+    /// HTTP client instance.
     client: reqwest::Client,
+    /// Soroban RPC endpoint URL.
     rpc_url: String,
 }
 
@@ -149,6 +151,9 @@ pub struct GetTransactionResponse {
 
 impl SorobanRpcClient {
     /// Create a new `SorobanRpcClient` from a [`NetworkConfig`].
+    ///
+    /// Initialises a [`reqwest::Client`] with a 30-second timeout and sets the
+    /// `Content-Type: application/json` header on every request.
     pub fn new(config: &NetworkConfig) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -213,10 +218,8 @@ impl SorobanRpcClient {
 
     /// Fetch ledger entries by their XDR keys.
     pub async fn get_ledger_entries(&self, keys: &[String]) -> PrismResult<serde_json::Value> {
-        let params = serde_json::json!({
-            "keys": keys,
-        });
-        self.call("getLedgerEntries", params).await
+        let params = serde_json::json!({ "keys": keys });
+        self.call::<serde_json::Value>("getLedgerEntries", params).await
     }
 
     /// Query events starting from `start_ledger` with the given filters.
@@ -237,6 +240,7 @@ impl SorobanRpcClient {
         self.call("getLatestLedger", serde_json::json!({})).await
     }
 
+    /// Internal JSON-RPC call with retry and rate-limit backoff.
     async fn call<T: for<'de> Deserialize<'de>>(
         &self,
         method: &str,
@@ -292,7 +296,6 @@ impl SorobanRpcClient {
                             status, body
                         )));
                     }
-
                     let rpc_response: JsonRpcResponse<T> = serde_json::from_str(&body)
                         .map_err(|e| PrismError::RpcError(format!("Response parse error: {e}")))?;
 
@@ -371,5 +374,53 @@ mod tests {
             let got: TransactionStatus = serde_json::from_str(raw).unwrap();
             assert_eq!(got, expected);
         }
+    }
+
+    #[test]
+    fn test_simulate_response_is_success() {
+        let ok = SimulateTransactionResponse {
+            latest_ledger: 100,
+            soroban_data: Some("AAAA".to_string()),
+            min_resource_fee: Some("1000".to_string()),
+            auth: vec![],
+            results: vec![],
+            error: None,
+            events: vec![],
+            cost: None,
+        };
+        assert!(ok.is_success());
+
+        let err = SimulateTransactionResponse {
+            error: Some("contract trap".to_string()),
+            ..ok
+        };
+        assert!(!err.is_success());
+    }
+
+    #[test]
+    fn test_simulate_response_deserialization() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "latestLedger": 200,
+                "transactionData": "AAAAXDR=",
+                "minResourceFee": "5000",
+                "auth": ["AUTHXDR="],
+                "results": [{"xdr": "RETVAL=", "auth": []}],
+                "events": []
+            }
+        }"#;
+
+        let resp: JsonRpcResponse<SimulateTransactionResponse> =
+            serde_json::from_str(json).unwrap();
+        let result = resp.result.unwrap();
+
+        assert_eq!(result.latest_ledger, 200);
+        assert_eq!(result.soroban_data.as_deref(), Some("AAAAXDR="));
+        assert_eq!(result.min_resource_fee.as_deref(), Some("5000"));
+        assert_eq!(result.auth, vec!["AUTHXDR="]);
+        assert_eq!(result.return_value_xdr(), Some("RETVAL="));
+        assert!(result.is_success());
     }
 }

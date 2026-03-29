@@ -8,5 +8,5 @@ pub mod rpc;
 pub use config::{Network, NetworkConfig};
 pub use rpc::{
     SimulateAuthEntry, SimulateCost, SimulateFootprint, SimulateResult, SimulateSorobanData,
-    SimulateTransactionResponse,
+    SimulateTransactionResponse, SorobanRpcClient,
 };
