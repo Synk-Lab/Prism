@@ -14,12 +14,6 @@ pub enum Network {
     Custom,
 }
 
-impl Default for Network {
-    fn default() -> Self {
-        Self::Testnet
-    }
-}
-
 impl Network {
     /// Returns the default Soroban RPC URL for preset networks.
     pub fn default_rpc_url(&self) -> &str {
@@ -32,7 +26,6 @@ impl Network {
         }
     }
 }
-
 /// Configuration for connecting to a Stellar network.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkConfig {

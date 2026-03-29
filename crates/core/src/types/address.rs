@@ -1,7 +1,7 @@
 //! Address types for Stellar accounts and contracts.
 
 use std::fmt;
-use stellar_strkey::{Contract, ed25519::PublicKey, Strkey};
+use stellar_strkey::{ed25519::PublicKey, Contract, Strkey};
 
 use crate::types::error::{PrismError, PrismResult};
 
