@@ -20,7 +20,7 @@ stellar-strkey = "0.0.9"
 soroban-env-host = "21"
 
 # Networking & Serialization
-reqwest = { version = "0.12", features = ["json", "gzip"] }
+reqwest = { version = "0.12", features = ["json", "gzip", "rustls-tls"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.24"
 futures-util = "0.3"

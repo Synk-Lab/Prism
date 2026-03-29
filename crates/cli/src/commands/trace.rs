@@ -12,6 +12,14 @@ pub struct TraceArgs {
     /// Output trace to a file instead of stdout.
     #[arg(long, short)]
     pub output_file: Option<String>,
+
+    /// Show authorization tree view.
+    #[arg(long)]
+    pub auth: bool,
+
+    /// Show only authorization structure.
+    #[arg(long)]
+    pub auth_only: bool,
 }
 
 pub async fn run(
@@ -28,7 +36,15 @@ pub async fn run(
 
     progress.finish_and_clear();
 
-    let output = crate::output::format_trace(&trace, output_format)?;
+    let output = if args.auth || args.auth_only {
+        if args.auth_only {
+            crate::output::auth_tree::render_auth_only(&trace)?
+        } else {
+            crate::output::auth_tree::render_auth_tree(&trace)?
+        }
+    } else {
+        crate::output::format_trace(&trace, output_format)?
+    };
 
     if let Some(path) = args.output_file {
         std::fs::write(&path, &output)?;
@@ -43,6 +59,5 @@ pub async fn run(
             .map_err(|e| anyhow::anyhow!("Failed to write save file '{}': {}", path, e))?;
         eprintln!("Saved trace to {path}");
     }
-
     Ok(())
 }

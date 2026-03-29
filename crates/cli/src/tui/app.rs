@@ -21,7 +21,6 @@ pub async fn launch(tx_hash: &str, network: &NetworkConfig) -> anyhow::Result<()
             crate::tui::state::Panel::Controls => crate::tui::widgets::controls::render(),
         }
     }
-
     // TODO: Initialize ratatui terminal, run event loop
     println!(
         "TUI debugger launching for {} on {:?}...",

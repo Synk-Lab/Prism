@@ -17,11 +17,13 @@ pub struct ExportArgs {
     pub output: Option<String>,
 }
 
-pub async fn run(args: ExportArgs, network: &NetworkConfig) -> anyhow::Result<()> {
-    println!(
-        "Exporting {} on {:?} as {} format...",
-        args.tx_hash, network.network, args.format
-    );
+pub async fn run(args: ExportArgs, network: &NetworkConfig, quiet: &bool) -> anyhow::Result<()> {
+    if !*quiet {
+        println!(
+            "Exporting {} on {:?} as {} format...",
+            args.tx_hash, network.network, args.format
+        );
+    }
 
     // TODO: Generate a self-contained test case from the debug session
     // - Historical state snapshot

@@ -6,6 +6,7 @@ use prism_core::types::config::NetworkConfig;
 #[derive(Args)]
 pub struct DiffArgs {
     /// Transaction hash to diff.
+    #[arg(value_name = "TX_HASH")]
     pub tx_hash: String,
 }
 
@@ -31,6 +32,5 @@ pub async fn run(
             .map_err(|e| anyhow::anyhow!("Failed to write save file '{}': {}", path, e))?;
         eprintln!("Saved diff to {path}");
     }
-
     Ok(())
 }

@@ -1,5 +1,7 @@
 //! TUI application state management.
 
+#![allow(dead_code)]
+
 /// TUI application state.
 #[derive(Debug)]
 pub struct TuiState {

@@ -1,10 +1,13 @@
 //! Output formatting for CLI reports.
 
+#![allow(dead_code)]
+
 use prism_core::types::{
     report::DiagnosticReport,
     trace::{DiffChangeType, ExecutionTrace, ResourceProfile, StateDiff},
 };
 
+pub mod auth_tree;
 pub mod compact;
 pub mod human;
 pub mod json;
@@ -54,24 +57,26 @@ pub fn print_resource_profile(
         OutputMode::Json => println!("{}", serde_json::to_string_pretty(profile)?),
         OutputMode::Short => println!("{}", format_resource_profile_summary(profile)),
         OutputMode::Human => {
-            println!("{}", colored::Colorize::bold("Resource Profile"));
+            println!("{}", renderers::render_section_header("Resource Profile"));
             println!(
-                "CPU: {}/{} instructions",
-                profile.total_cpu, profile.cpu_limit
+                "{}",
+                renderers::BudgetBar::new("CPU", profile.total_cpu, profile.cpu_limit).render()
             );
             println!(
-                "Memory: {}/{} bytes",
-                profile.total_memory, profile.memory_limit
+                "{}",
+                renderers::BudgetBar::new("Memory", profile.total_memory, profile.memory_limit)
+                    .render()
             );
             for warning in &profile.warnings {
-                println!("{} {warning}", colored::Colorize::yellow("!"));
+                println!("{} {warning}", colored::Colorize::yellow("⚠"));
             }
+            println!();
+            print!("{}", renderers::render_heatmap(profile));
         }
     }
 
     Ok(())
 }
-
 pub fn print_state_diff(diff: &StateDiff, output_format: &str) -> anyhow::Result<()> {
     match OutputMode::parse(output_format) {
         OutputMode::Json => println!("{}", serde_json::to_string_pretty(diff)?),

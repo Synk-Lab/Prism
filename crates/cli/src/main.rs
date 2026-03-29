@@ -12,10 +12,26 @@
 //!   prism db update              — Update taxonomy database
 //!   prism clean                  — Clear local cache data
 
+//! Prism CLI — Soroban Transaction Debugger
+//!
+//! Usage:
+//!   prism decode <tx-hash>       — Decode a transaction error
+//!   prism inspect <tx-hash>      — Full transaction context
+//!   prism trace <tx-hash>        — Replay and trace execution
+//!   prism profile <tx-hash>      — Resource consumption profile
+//!   prism diff <tx-hash>         — State diff (before/after)
+//!   prism replay <tx-hash> -i    — Interactive TUI debugger
+//!   prism whatif <tx-hash>       — Re-simulate with modifications
+//!   prism export <tx-hash>       — Export as regression test
+//!   prism db update              — Update taxonomy database
+//!   prism serve                  — Start WebSocket server for streaming trace updates
+//!   prism clean                  — Clear local cache data
+
 mod commands;
 mod config;
 mod output;
 mod tui;
+mod version_check;
 
 use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
 use tracing::level_filters::LevelFilter;
@@ -26,13 +42,7 @@ const BUILD_HASH: &str = env!("PRISM_BUILD_HASH");
 
 /// Prism — From cryptic error to root cause in one command.
 #[derive(Parser)]
-#[command(
-    name = "prism",
-    version = env!("CARGO_PKG_VERSION"),
-    disable_version_flag = true,
-    about,
-    long_about = None
-)]
+#[command(name = "prism", version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
     /// Subcommand to execute.
@@ -40,7 +50,12 @@ struct Cli {
     command: Commands,
 
     /// Output format: human, json, compact, or short.
-    #[arg(long, default_value = "human", value_parser = ["human", "json", "compact", "short"], global = true)]
+    #[arg(
+        long,
+        default_value = "human",
+        value_parser = ["human", "json", "compact", "short"],
+        global = true
+    )]
     output: String,
 
     /// Network: mainnet, testnet, futurenet, or a custom RPC URL.
@@ -58,6 +73,10 @@ struct Cli {
     /// Save analysis output as JSON to the specified file path.
     #[arg(long, global = true, value_name = "PATH")]
     save: Option<String>,
+
+    /// Suppress non-essential output.
+    #[arg(long, short, global = true)]
+    quiet: bool,
 }
 
 #[derive(Subcommand)]
@@ -90,6 +109,8 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let update_check_handle = tokio::spawn(version_check::check_for_updates());
+
     let version: &'static str = Box::leak(build_version().into_boxed_str());
     let matches = Cli::command().version(version).get_matches();
     let cli = Cli::from_arg_matches(&matches)?;
@@ -137,13 +158,28 @@ async fn main() -> anyhow::Result<()> {
             commands::profile::run(args, &network, &cli.output, save).await?
         }
         Commands::Diff(args) => commands::diff::run(args, &network, &cli.output, save).await?,
-        Commands::Replay(args) => commands::replay::run(args, &network).await?,
+        Commands::Replay(args) => commands::replay::run(args, &network, &cli.quiet).await?,
         Commands::Whatif(args) => commands::whatif::run(args, &network, &cli.output, save).await?,
-        Commands::Export(args) => commands::export::run(args, &network).await?,
+        Commands::Export(args) => commands::export::run(args, &network, &cli.quiet).await?,
         Commands::Clean(args) => commands::clean::run(args).await?,
         Commands::Db(args) => commands::db::run(args).await?,
         Commands::Serve(args) => commands::serve::run(args, &network).await?,
         Commands::Diagnostic(args) => commands::diagnostic::run(args).await?,
+    }
+
+    if let Ok(Ok(Some(newer_version))) =
+        tokio::time::timeout(std::time::Duration::from_millis(50), update_check_handle).await
+    {
+        eprintln!(
+            "\n{}",
+            colored::Colorize::bright_yellow(
+                format!(
+                    "A newer version of Prism is available (v{}). Update to stay current!",
+                    newer_version
+                )
+                .as_str()
+            )
+        );
     }
 
     Ok(())
@@ -207,7 +243,7 @@ mod tests {
 
     #[test]
     fn parses_long_verbose_flag_after_subcommand() {
-        let cli = Cli::try_parse_from(["prism", "decode", "--verbose", "abc123"])
+        let cli = Cli::try_parse_from(["prism", "decode", "--verbose", &"a".repeat(64)])
             .expect("cli should parse");
         assert_eq!(cli.verbose, 1);
     }
@@ -244,6 +280,38 @@ mod tests {
             }
             _ => panic!("expected trace command"),
         }
+    }
+
+    #[test]
+    fn parses_diff_tx_hash_argument() {
+        let cli = Cli::try_parse_from(["prism", "diff", "deadbeef"]).expect("cli should parse");
+
+        match cli.command {
+            Commands::Diff(args) => assert_eq!(args.tx_hash, "deadbeef"),
+            _ => panic!("expected diff command"),
+        }
+    }
+
+    #[test]
+    fn parses_save_flag_for_trace() {
+        let tx_hash = "a".repeat(64);
+        let cli = Cli::try_parse_from(["prism", "--save", "report.json", "trace", &tx_hash])
+            .expect("cli should parse with --save");
+        assert_eq!(cli.save.as_deref(), Some("report.json"));
+    }
+
+    #[test]
+    fn save_flag_absent_by_default() {
+        let cli = Cli::try_parse_from(["prism", "db", "update"]).expect("cli should parse");
+        assert!(cli.save.is_none());
+    }
+
+    #[test]
+    fn save_flag_can_appear_after_subcommand() {
+        let tx_hash = "a".repeat(64);
+        let cli = Cli::try_parse_from(["prism", "trace", &tx_hash, "--save", "out.json"])
+            .expect("--save after subcommand should parse");
+        assert_eq!(cli.save.as_deref(), Some("out.json"));
     }
 
     #[test]
