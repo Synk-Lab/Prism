@@ -262,19 +262,12 @@ pub fn default_network() -> NetworkConfig {
 /// Validate that a network configuration is reachable.
 #[allow(dead_code)]
 pub async fn validate_network(config: &NetworkConfig) -> bool {
-    let client = reqwest::Client::new();
-    client
-        .post(&config.rpc_url)
-        .json(&serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "getHealth",
-            "params": {}
-        }))
-        .send()
+    let transport = JsonRpcTransport::new(&config.rpc_url, 0);
+    let req = JsonRpcRequest::new(1, "getHealth", GetHealthParams {});
+    transport
+        .call::<_, serde_json::Value>(&req)
         .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
+        .is_ok()
 }
 
 #[cfg(test)]

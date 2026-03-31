@@ -4,6 +4,10 @@
 //! `getLedgerEntries`, `getEvents`, `getLatestLedger`. Handles retries and
 //! basic rate-limit backoff.
 
+use crate::network::jsonrpc::{
+    EmptyParams, GetEventsParams, GetLedgerEntriesParams, GetTransactionParams,
+    JsonRpcRequest, JsonRpcTransport, SimulateTransactionParams,
+};
 use crate::types::config::NetworkConfig;
 use crate::types::error::{PrismError, PrismResult};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};

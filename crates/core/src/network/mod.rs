@@ -2,6 +2,7 @@
 
 pub mod archive;
 pub mod config;
+pub mod jsonrpc;
 pub mod rpc;
 
 pub use config::{Network, NetworkConfig};
