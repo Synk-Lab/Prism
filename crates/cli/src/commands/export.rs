@@ -17,9 +17,17 @@ pub struct ExportArgs {
     pub output: Option<String>,
 }
 
-pub async fn run(args: ExportArgs, _network: &NetworkConfig, quiet: &bool) -> anyhow::Result<()> {
+pub async fn run(
+    args: ExportArgs,
+    network: &NetworkConfig,
+    output_format: &str,
+    quiet: &bool,
+) -> anyhow::Result<()> {
     if !*quiet {
-        println!("Exporting {} as {} format...", args.tx_hash, args.format);
+        println!(
+            "Exporting {} on {:?} as {} format...",
+            args.tx_hash, network.network, args.format
+        );
     }
 
     // TODO: Generate a self-contained test case from the debug session
@@ -34,7 +42,19 @@ pub async fn run(args: ExportArgs, _network: &NetworkConfig, quiet: &bool) -> an
         )
     });
 
-    if !*quiet {
+    if matches!(
+        crate::output::OutputFormat::parse(output_format),
+        crate::output::OutputFormat::Json
+    ) {
+        let payload = serde_json::json!({
+            "tx_hash": args.tx_hash,
+            "network": format!("{:?}", network.network),
+            "format": args.format,
+            "output_path": output_path,
+            "status": "exported",
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
         println!("Test case exported to {output_path}");
     }
 
