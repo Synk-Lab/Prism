@@ -2,6 +2,7 @@
 
 use clap::Args;
 use futures_util::{SinkExt, StreamExt};
+use prism_core::network::rpc::SorobanRpcClient;
 use prism_core::types::config::NetworkConfig;
 use std::net::SocketAddr;
 use std::sync::Arc;
