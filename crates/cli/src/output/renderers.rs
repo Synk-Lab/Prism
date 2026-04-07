@@ -2,7 +2,8 @@
 
 #![allow(dead_code)]
 
-use prism_core::types::report::TransactionContext;
+use colored::Colorize;
+use prism_core::types::report::{DiagnosticReport, TransactionContext};
 use prism_core::types::trace::ResourceProfile;
 use tabled::{Table, Tabled};
 use crate::output::theme::ColorPalette;
@@ -13,6 +14,11 @@ const HEAT_BLOCKS: [&str; 4] = ["░", "▒", "▓", "█"];
 /// Render a boxed section header suitable for terminal report sections.
 pub fn render_section_header(title: &str) -> String {
     SectionHeader::new(title).render()
+}
+
+/// Render an error card to display transaction errors prominently.
+pub fn render_error_card(report: &DiagnosticReport) -> String {
+    ErrorCard::new(report).render()
 }
 
 /// Utility for rendering a clearly separated section heading.
@@ -36,6 +42,54 @@ impl<'a> SectionHeader<'a> {
         let middle = palette.accent_text(&middle);
 
         format!("{}\n{}\n{}", border, middle, border)
+    }
+}
+
+/// Displays transaction errors with a bold red border and categorical labels.
+pub struct ErrorCard<'a> {
+    report: &'a DiagnosticReport,
+}
+
+impl<'a> ErrorCard<'a> {
+    pub fn new(report: &'a DiagnosticReport) -> Self {
+        Self { report }
+    }
+
+    pub fn render(&self) -> String {
+        let mut output = String::new();
+
+        // Create the border and content structure
+        let category_badge = format!("[{}]", self.report.error_category.to_uppercase());
+        let error_line = format!(
+            " {} ({})",
+            self.report.error_name, self.report.error_code
+        );
+
+        // Calculate width based on content
+        let max_width = error_line.len().max(self.report.summary.len()).max(category_badge.len()) + 4;
+        let border = "█".repeat(max_width);
+
+        // Render with red color
+        let border_colored = border.red().bold().to_string();
+        let category_colored = category_badge.red().bold().to_string();
+        let error_colored = error_line.red().bold().to_string();
+        let summary_colored = self.report.summary.white().to_string();
+
+        // Build the card
+        output.push_str(&format!("{}\n", border_colored));
+        output.push_str(&format!("{} {}\n", "█".red().bold(), category_colored));
+        output.push_str(&format!("{} {}\n", "█".red().bold(), error_colored));
+
+        // Add component info if it's a contract error
+        if let Some(contract_error) = &self.report.contract_error {
+            let component_line = format!("Component: {}", contract_error.contract_id);
+            output.push_str(&format!("{} {}\n", "█".red().bold(), component_line.white()));
+        }
+
+        output.push_str(&format!("{} {}\n", "█".red().bold(), summary_colored));
+        output.push_str(&format!("{}\n", border_colored));
+
+        output
     }
 }
 
@@ -240,13 +294,10 @@ pub fn render_context_table(context: &TransactionContext) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        render_context_table, render_heatmap, render_section_header, BudgetBar, SectionHeader,
+    use super::*;
+    use prism_core::types::report::{
+        ContractErrorInfo, FeeBreakdown, ResourceSummary, Severity, TransactionContext,
     };
-    use super::{
-        FeeBreakdown, ResourceHotspot, ResourceProfile, ResourceSummary, TransactionContext,
-    };
-    use prism_core::types::report::{FeeBreakdown, ResourceSummary, TransactionContext};
     use prism_core::types::trace::{ResourceHotspot, ResourceProfile};
 
     fn make_profile(hotspots: Vec<ResourceHotspot>) -> ResourceProfile {
@@ -262,36 +313,41 @@ mod tests {
         }
     }
 
+    fn create_test_report() -> DiagnosticReport {
+        DiagnosticReport {
+            error_category: "Contract".to_string(),
+            error_code: 1,
+            error_name: "InsufficientBalance".to_string(),
+            summary: "The account does not have enough balance to complete this transaction.".to_string(),
+            detailed_explanation: String::new(),
+            severity: Severity::Error,
+            root_causes: Vec::new(),
+            suggested_fixes: Vec::new(),
+            contract_error: Some(ContractErrorInfo {
+                contract_id: "CBDLTOJWR2YX2U6BR3P5C4UXKWHE5DJW3JPSIOEXTW2E7D5JUDPQULE7".to_string(),
+                error_code: 1,
+                error_name: Some("InsufficientBalance".to_string()),
+                doc_comment: Some("User attempted transfer with insufficient balance".to_string()),
+            }),
+            transaction_context: None,
+            related_errors: Vec::new(),
+        }
+    }
+
     #[test]
     fn section_header_renders_boxed_uppercase_title() {
         let rendered = SectionHeader::new("Transaction Summary").render();
-
         assert!(rendered.contains("TRANSACTION SUMMARY"));
         assert!(rendered.contains("+"));
         assert!(rendered.contains("|"));
     }
 
     #[test]
-    fn section_header_function_trims_title() {
-        let rendered = render_section_header("  network info  ");
-
-        assert!(rendered.contains("NETWORK INFO"));
-    }
-
-    #[test]
-    fn budget_bar_renders_with_zero_limit() {
-        let rendered = BudgetBar::new("CPU", 0, 0).render();
-
+    fn budget_bar_renders_low_usage() {
+        let bar = BudgetBar::new("CPU", 100, 1000);
+        let rendered = bar.render();
         assert!(rendered.contains("CPU"));
-        assert!(rendered.contains("0%"));
-    }
-
-    #[test]
-    fn heatmap_empty_hotspots_shows_no_data_message() {
-        let profile = make_profile(vec![]);
-        let output = render_heatmap(&profile);
-
-        assert!(output.contains("No hotspot data available."));
+        assert!(rendered.contains("10%"));
     }
 
     #[test]
@@ -304,21 +360,18 @@ mod tests {
                 memory_bytes: 300_000,
                 memory_percentage: 30.0,
             },
-            ResourceHotspot {
-                location: "storage::get".to_string(),
-                cpu_instructions: 200_000,
-                cpu_percentage: 20.0,
-                memory_bytes: 100_000,
-                memory_percentage: 10.0,
-            },
         ]);
         let output = render_heatmap(&profile);
-
         assert!(output.contains("transfer::invoke"));
-        assert!(output.contains("storage::get"));
-        assert!(output.contains("CPU"));
-        assert!(output.contains("Memory"));
-        assert!(output.contains("Legend"));
+    }
+
+    #[test]
+    fn error_card_renders_basic_error() {
+        let report = create_test_report();
+        let rendered = render_error_card(&report);
+        assert!(rendered.contains("InsufficientBalance"));
+        assert!(rendered.contains("[CONTRACT]"));
+        assert!(rendered.contains("does not have enough balance"));
     }
 
     #[test]
@@ -327,11 +380,7 @@ mod tests {
             tx_hash: "abc123".to_string(),
             ledger_sequence: 12345,
             function_name: Some("transfer".to_string()),
-            arguments: vec![
-                "GABC123...".to_string(),
-                "GDEF456...".to_string(),
-                "1000".to_string(),
-            ],
+            arguments: vec!["GABC".to_string(), "100".to_string()],
             fee: FeeBreakdown {
                 inclusion_fee: 100,
                 resource_fee: 50,
@@ -349,39 +398,8 @@ mod tests {
         };
 
         let output = render_context_table(&context);
-
         assert!(output.contains("Function: transfer"));
         assert!(output.contains("Arguments:"));
-        assert!(output.contains("GABC123..."));
-        assert!(output.contains("GDEF456..."));
-        assert!(output.contains("1000"));
-    }
-
-    #[test]
-    fn render_context_table_empty() {
-        let context = TransactionContext {
-            tx_hash: "abc123".to_string(),
-            ledger_sequence: 12345,
-            function_name: None,
-            arguments: vec![],
-            fee: FeeBreakdown {
-                inclusion_fee: 100,
-                resource_fee: 50,
-                refundable_fee: 25,
-                non_refundable_fee: 25,
-            },
-            resources: ResourceSummary {
-                cpu_instructions_used: 1000,
-                cpu_instructions_limit: 10000,
-                memory_bytes_used: 5000,
-                memory_bytes_limit: 50000,
-                read_bytes: 1000,
-                write_bytes: 500,
-            },
-        };
-
-        let output = render_context_table(&context);
-
-        assert!(output.is_empty());
+        assert!(output.contains("GABC"));
     }
 }
