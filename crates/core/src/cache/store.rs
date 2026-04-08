@@ -3,7 +3,7 @@
 //! Uses `redb` as an embedded key-value database for fast, zero-config
 //! local caching of WASM blobs, parsed contractspecs, and historical ledger entries.
 
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 use std::path::PathBuf;
 
 /// Cache entry categories.

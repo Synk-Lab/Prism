@@ -41,7 +41,7 @@ pub struct NetworkConfig {
     /// Per-request timeout in seconds for all RPC calls.
     ///
     /// Any request that does not receive a complete response within this
-    /// window is cancelled and returns [`crate::types::error::PrismError::NetworkTimeout`].
+    /// window is cancelled and returns [`crate::error::PrismError::NetworkTimeout`].
     /// Defaults to [`DEFAULT_REQUEST_TIMEOUT_SECS`] (30 s) when deserializing
     /// configs that do not specify this field.
     #[serde(default = "default_request_timeout_secs")]

@@ -15,7 +15,7 @@ description = "Soroban Transaction Debugger — From cryptic error to root cause
 
 [workspace.dependencies]
 # Stellar / Soroban — Critical Path
-stellar-xdr = { version = "21.2.0", features = ["std", "serde"] }
+stellar-xdr = { version = "21.2.0", features = ["std", "serde", "next"] }
 stellar-strkey = "0.0.9"
 soroban-env-host = "21.2.0"
 soroban-spec = "21.0.0"
@@ -37,6 +37,7 @@ libc = "0.2"
 # CLI Framework & Output
 clap = { version = "4", features = ["derive", "env", "color"] }
 anyhow = "1"
+thiserror = "1"
 colored = "2"
 indicatif = "0.17"
 dialoguer = "0.11"

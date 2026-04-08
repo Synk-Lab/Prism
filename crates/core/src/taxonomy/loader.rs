@@ -4,7 +4,7 @@
 //! (category, code) for O(1) lookup.
 
 use crate::taxonomy::schema::{ErrorCategory, TaxonomyEntry, TaxonomyFile};
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 use std::collections::HashMap;
 
 /// In-memory taxonomy database indexed by (category, code).

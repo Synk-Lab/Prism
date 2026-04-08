@@ -1,7 +1,7 @@
 //! Resource profiler — generates consumption profiles and identifies hotspots.
 
 use crate::replay::sandbox::SandboxResult;
-use crate::types::error::PrismResult;
+use crate::error::PrismResult;
 use crate::types::trace::ResourceProfile;
 
 /// Generate a resource consumption profile from sandbox execution results.

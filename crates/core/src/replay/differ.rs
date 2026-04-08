@@ -2,7 +2,7 @@
 
 use crate::replay::sandbox::SandboxResult;
 use crate::replay::state::LedgerState;
-use crate::types::error::PrismResult;
+use crate::error::PrismResult;
 use crate::types::trace::{DiffChangeType, LedgerEntryDiff, StateDiff};
 
 /// Compute the state diff between pre-execution and post-execution ledger states.

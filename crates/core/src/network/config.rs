@@ -3,7 +3,7 @@
 //! Manages RPC endpoints, archive URLs, network passphrases for
 //! mainnet/testnet/futurenet/custom networks.
 
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -86,6 +86,26 @@ impl Network {
     pub fn config(&self) -> NetworkConfig {
         NetworkConfig::for_network(self.clone())
     }
+
+    /// Return the official Stellar network passphrase for this network.
+    pub fn passphrase(&self) -> &str {
+        match self {
+            Self::Mainnet => MAINNET_PASSPHRASE,
+            Self::Testnet => TESTNET_PASSPHRASE,
+            Self::Futurenet => FUTURENET_PASSPHRASE,
+            Self::Custom(_) => LOCAL_PASSPHRASE,
+        }
+    }
+
+    /// Return the default public RPC URL for this network.
+    pub fn default_rpc_url(&self) -> &str {
+        match self {
+            Self::Mainnet => MAINNET_RPC_URL,
+            Self::Testnet => TESTNET_RPC_URL,
+            Self::Futurenet => FUTURENET_RPC_URL,
+            Self::Custom(_) => LOCAL_RPC_URL,
+        }
+    }
 }
 
 impl Default for Network {
@@ -138,6 +158,8 @@ pub struct NetworkConfig {
     pub network_passphrase: String,
     /// History archive URL(s).
     pub archive_urls: Vec<String>,
+    /// Optional API key for authenticating RPC requests.
+    pub api_key: Option<String>,
 }
 
 impl NetworkConfig {
@@ -151,6 +173,7 @@ impl NetworkConfig {
                 .iter()
                 .map(|url| (*url).to_string())
                 .collect(),
+            api_key: None,
         }
     }
 
@@ -164,6 +187,7 @@ impl NetworkConfig {
                 .iter()
                 .map(|url| (*url).to_string())
                 .collect(),
+            api_key: None,
         }
     }
 
@@ -177,6 +201,7 @@ impl NetworkConfig {
                 .iter()
                 .map(|url| (*url).to_string())
                 .collect(),
+            api_key: None,
         }
     }
 
@@ -187,6 +212,7 @@ impl NetworkConfig {
             rpc_url: LOCAL_RPC_URL.to_string(),
             network_passphrase: LOCAL_PASSPHRASE.to_string(),
             archive_urls: Vec::new(),
+            api_key: None,
         }
     }
 
@@ -201,6 +227,7 @@ impl NetworkConfig {
             rpc_url: rpc_url.into(),
             network_passphrase: passphrase.into(),
             archive_urls: Vec::new(),
+            api_key: None,
         }
     }
 
@@ -226,8 +253,6 @@ impl NetworkConfig {
         }
     }
 }
-use crate::types::config::NetworkConfig;
-
 /// Resolve a network name string to a `NetworkConfig`.
 ///
 /// Accepts preset names, local aliases, or a custom RPC URL.
@@ -237,14 +262,6 @@ pub fn resolve_network(network_str: &str) -> NetworkConfig {
         Err(error) => {
             tracing::warn!(%error, network = network_str, "Unknown network, defaulting to testnet");
             NetworkConfig::testnet()
-    match network_str.to_lowercase().as_str() {
-        "mainnet" | "main" | "pubnet" => NetworkConfig::mainnet(),
-        "testnet" | "test" => NetworkConfig::testnet(),
-        "futurenet" | "future" => NetworkConfig::futurenet(),
-        url if url.starts_with("http") => NetworkConfig::custom(url, ""),
-        _ => {
-            tracing::warn!("Unknown network '{network_str}', defaulting to testnet");
-            default_network()
         }
     }
 }

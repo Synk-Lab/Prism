@@ -3,7 +3,7 @@
 //! Provides strongly-typed request/response envelopes and a reusable HTTP
 //! transport so every RPC call is validated at compile time via Serde.
 
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 

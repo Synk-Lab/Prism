@@ -3,7 +3,7 @@
 //! Handles serialization/deserialization of transaction envelopes, results,
 //! ledger entries, SCVal, and SCSpecEntry types.
 
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use stellar_xdr::{
     DecoratedSignature, LedgerEntry, Limits, Memo, MuxedAccount, Operation, Preconditions, ReadXdr, 
@@ -212,6 +212,19 @@ mod tests {
     fn test_decode_tx_hash_valid() {
         let hash = "a".repeat(64);
         assert!(decode_tx_hash(&hash).is_ok());
+    }
+
+    #[test]
+    fn test_transaction_result_round_trip() {
+        // Minimal valid TransactionResult: feeCharged=0, txSUCCESS=0, results=[], ext=V0
+        // 8 bytes (fee), 4 bytes (code), 4 bytes (results len), 4 bytes (ext)
+        let xdr_bytes = vec![0u8; 20];
+        let bytes = encode_xdr_base64(&xdr_bytes);
+        
+        let decoded = TransactionResult::from_xdr_base64(&bytes).expect("decode");
+        let encoded = decoded.to_xdr_base64().expect("encode");
+        
+        assert_eq!(bytes, encoded);
     }
 }
 

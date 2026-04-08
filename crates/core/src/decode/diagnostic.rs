@@ -4,7 +4,7 @@
 //! context such as which budget category was exceeded, which auth check failed,
 //! or which storage key was inaccessible.
 
-use crate::types::error::PrismResult;
+use crate::error::PrismResult;
 use crate::types::report::DiagnosticReport;
 
 /// Enrich a diagnostic report with information from diagnostic events.

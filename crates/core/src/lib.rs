@@ -14,11 +14,14 @@
 //! - `debugger`: Enable Tier 3 interactive debugger (implies `replay`)
 //! - `wasm-compat`: Build for WASM target (disables features requiring native I/O)
 
+pub mod archive;
 pub mod cache;
 pub mod debugger;
 pub mod decode;
+pub mod error;
 pub mod network;
 pub mod replay;
+pub mod rpc;
 pub mod spec;
 pub mod taxonomy;
 pub mod types;
@@ -28,7 +31,7 @@ pub mod xdr;
 pub use network::config::Network;
 pub use types::address::Address;
 pub use types::config::NetworkConfig;
-pub use types::error::PrismError;
+pub use error::{PrismError, PrismResult};
 pub use types::report::DiagnosticReport;
 
 /// Library version

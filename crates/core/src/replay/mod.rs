@@ -7,7 +7,7 @@ pub mod state;
 pub mod trace;
 
 use crate::types::config::NetworkConfig;
-use crate::types::error::PrismResult;
+use crate::error::PrismResult;
 use crate::types::trace::ExecutionTrace;
 
 /// Replay a transaction and produce a full execution trace.

@@ -5,7 +5,7 @@
 
 use crate::spec::decoder;
 use crate::types::config::NetworkConfig;
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 use crate::types::report::ContractErrorInfo;
 
 /// Resolve a contract-specific error code to its named variant.
@@ -55,7 +55,7 @@ pub async fn resolve(
 
 /// Fetch a contract's WASM bytecode from the Soroban RPC.
 async fn fetch_contract_wasm(contract_id: &str, network: &NetworkConfig) -> PrismResult<Vec<u8>> {
-    let rpc = crate::network::rpc::SorobanRpcClient::new(network);
+    let rpc = crate::rpc::SorobanRpcClient::new(network);
 
     // TODO: Build the contract code ledger key and fetch via getLedgerEntries
     let _result = rpc.get_ledger_entries(&[contract_id.to_string()]).await?;

@@ -5,7 +5,7 @@
 
 use crate::decode::host_error::ClassifiedError;
 use crate::taxonomy::loader::TaxonomyDatabase;
-use crate::types::error::PrismResult;
+use crate::error::PrismResult;
 use crate::types::report::{DiagnosticReport, RootCause, Severity, SuggestedFix};
 
 /// Build a diagnostic report from a classified error.

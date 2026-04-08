@@ -4,7 +4,7 @@
 //! into known error families using the taxonomy database.
 
 use crate::taxonomy::schema::ErrorCategory;
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 
 /// Classified error information extracted from a transaction result.
 #[derive(Debug, Clone)]

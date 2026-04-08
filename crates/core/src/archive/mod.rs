@@ -3,8 +3,8 @@
 //! Fetches and decompresses history archive files for cold-path state reconstruction.
 //! Supports S3/GCS/HTTP backends. Used only for older transactions outside the RPC hot path.
 
-use crate::types::config::NetworkConfig;
-use crate::types::error::{PrismError, PrismResult};
+use crate::network::NetworkConfig;
+use crate::error::{PrismError, PrismResult};
 
 /// Client for accessing Stellar History Archives.
 pub struct ArchiveClient {
