@@ -3,7 +3,7 @@
 use std::fmt;
 use stellar_strkey::{ed25519::PublicKey, Contract, Strkey};
 
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 
 /// Represents a Stellar address (account or contract).
 ///
@@ -148,6 +148,19 @@ mod tests {
                 assert!(msg.contains("Unsupported address type"));
             }
             _ => panic!("Expected InvalidAddress error for unsupported type"),
+        }
+    }
+
+    #[test]
+    fn test_address_from_string_corrupted_checksum() {
+        let s = "GA5W327P3O6PDH4YCWYAW5M36DREB6ZRYNRFCTO7C6XU66OJSXR6X6R7"; // Ending changed from R6 to R7
+        let res = Address::from_string(s);
+        assert!(res.is_err());
+        match res {
+            Err(PrismError::InvalidAddress(msg)) => {
+                assert!(msg.contains("Failed to parse strkey"));
+            }
+            _ => panic!("Expected InvalidAddress error for corrupted checksum"),
         }
     }
 }

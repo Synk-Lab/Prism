@@ -1,6 +1,8 @@
 //! CLI command handlers.
 
 pub mod auth;
+pub mod clean;
+pub mod db;
 pub mod decode;
 pub mod diagnostic;
 pub mod diff;

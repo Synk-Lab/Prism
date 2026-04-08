@@ -3,7 +3,7 @@
 //! Extracts `contractspecv0` and `SCMetaEntry` metadata from WASM custom sections.
 //! Used to resolve contract-specific error enums, function signatures, and type definitions.
 
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 use serde::{Deserialize, Serialize};
 
 /// A decoded contract error enum variant.

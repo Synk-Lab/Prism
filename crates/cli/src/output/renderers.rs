@@ -21,6 +21,16 @@ pub fn render_error_card(report: &DiagnosticReport) -> String {
     ErrorCard::new(report).render()
 }
 
+/// Render a list of suggested fixes.
+pub fn render_fix_list(fixes: &[prism_core::types::report::SuggestedFix]) -> String {
+    FixList::new(fixes).render()
+}
+
+/// Render a state diff table comparing old and new values.
+pub fn render_state_diff_table(diff: &prism_core::types::trace::StateDiff) -> String {
+    StateDiffTable::new(diff).render()
+}
+
 /// Utility for rendering a clearly separated section heading.
 pub struct SectionHeader<'a> {
     title: &'a str,
@@ -88,6 +98,42 @@ impl<'a> ErrorCard<'a> {
 
         output.push_str(&format!("{} {}\n", "█".red().bold(), summary_colored));
         output.push_str(&format!("{}\n", border_colored));
+
+        output
+    }
+}
+
+/// Renders a bulleted list of suggested fixes with fix IDs.
+pub struct FixList<'a> {
+    fixes: &'a [prism_core::types::report::SuggestedFix],
+}
+
+impl<'a> FixList<'a> {
+    pub fn new(fixes: &'a [prism_core::types::report::SuggestedFix]) -> Self {
+        Self { fixes }
+    }
+
+    pub fn render(&self) -> String {
+        if self.fixes.is_empty() {
+            return String::new();
+        }
+
+        let mut output = String::new();
+        let palette = ColorPalette::default();
+
+        output.push_str(&palette.accent_text("SUGGESTED FIXES\n"));
+
+        for fix in self.fixes {
+            let fix_id = format!("[fix:{}]", fix.id).cyan();
+            output.push_str(&format!("  • {} {}\n", fix_id, fix.description));
+
+            if let Some(code) = &fix.remedy_code {
+                let code_block = format!("    ```\n    {}\n    ```", code.trim())
+                    .dimmed()
+                    .to_string();
+                output.push_str(&format!("{}\n", code_block));
+            }
+        }
 
         output
     }
@@ -290,6 +336,67 @@ pub fn render_context_table(context: &TransactionContext) -> String {
     output.push_str(&table);
 
     output
+}
+
+#[derive(Tabled)]
+struct DiffRow {
+    #[tabled(rename = "Key")]
+    key: String,
+    #[tabled(rename = "Change")]
+    change: String,
+    #[tabled(rename = "Old Value")]
+    old_value: String,
+    #[tabled(rename = "New Value")]
+    new_value: String,
+}
+
+/// Renders a detailed state diff table.
+pub struct StateDiffTable<'a> {
+    diff: &'a prism_core::types::trace::StateDiff,
+}
+
+impl<'a> StateDiffTable<'a> {
+    pub fn new(diff: &'a prism_core::types::trace::StateDiff) -> Self {
+        Self { diff }
+    }
+
+    pub fn render(&self) -> String {
+        if self.diff.entries.is_empty() {
+            return String::new();
+        }
+
+        let palette = ColorPalette::default();
+        let rows: Vec<DiffRow> = self
+            .diff
+            .entries
+            .iter()
+            .map(|entry| {
+                let change = match entry.change_type {
+                    prism_core::types::trace::DiffChangeType::Created => {
+                        palette.success_text("Created")
+                    }
+                    prism_core::types::trace::DiffChangeType::Deleted => {
+                        palette.error_text("Deleted")
+                    }
+                    prism_core::types::trace::DiffChangeType::Updated => {
+                        palette.warning_text("Updated")
+                    }
+                    prism_core::types::trace::DiffChangeType::Unchanged => {
+                        palette.muted_text("Unchanged")
+                    }
+                };
+
+                DiffRow {
+                    key: entry.key.clone(),
+                    change,
+                    old_value: entry.before.clone().unwrap_or_else(|| "-".to_string()),
+                    new_value: entry.after.clone().unwrap_or_else(|| "-".to_string()),
+                }
+            })
+            .collect();
+
+        Table::new(rows).to_string()
+    }
 }
 
 #[cfg(test)]

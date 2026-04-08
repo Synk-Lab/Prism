@@ -9,7 +9,7 @@ pub mod diagnostic;
 pub mod host_error;
 pub mod report;
 
-use crate::types::error::PrismResult;
+use crate::error::PrismResult;
 use crate::types::report::DiagnosticReport;
 
 /// Filter transaction data to focus on a specific operation index.
@@ -71,11 +71,11 @@ pub async fn decode_transaction_with_op_filter(
     op_index: Option<usize>,
 ) -> PrismResult<DiagnosticReport> {
     // 1. Fetch the transaction result
-    let rpc = crate::network::rpc::SorobanRpcClient::new(network);
+    let rpc = crate::rpc::SorobanRpcClient::new(network);
     let tx_data = rpc.get_transaction(tx_hash).await?;
     // Convert typed response back to Value for downstream processing
     let mut tx_data = serde_json::to_value(tx_data)
-        .map_err(|e| crate::types::error::PrismError::Internal(e.to_string()))?;
+        .map_err(|e| crate::error::PrismError::Internal(e.to_string()))?;
 
     // 2. Filter by operation index if specified
     if let Some(index) = op_index {

@@ -4,12 +4,9 @@
 //! `getLedgerEntries`, `getEvents`, `getLatestLedger`. Handles retries and
 //! basic rate-limit backoff.
 
-use crate::network::jsonrpc::{
-    EmptyParams, GetEventsParams, GetLedgerEntriesParams, GetTransactionParams,
-    JsonRpcRequest, JsonRpcTransport, SimulateTransactionParams,
-};
-use crate::types::config::NetworkConfig;
-use crate::types::error::{PrismError, PrismResult};
+use crate::rpc::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
+use crate::network::NetworkConfig;
+use crate::error::{PrismError, PrismResult};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
@@ -97,30 +94,7 @@ pub struct SorobanRpcClient {
     rpc_url: String,
 }
 
-#[derive(Debug, Serialize)]
-struct JsonRpcRequest<'a, P: Serialize> {
-    jsonrpc: &'a str,
-    id: u64,
-    method: &'a str,
-    params: P,
-}
 
-#[derive(Debug, Deserialize)]
-struct JsonRpcResponse<T> {
-    #[allow(dead_code)]
-    jsonrpc: String,
-    #[allow(dead_code)]
-    id: u64,
-    result: Option<T>,
-    error: Option<JsonRpcError>,
-}
-
-#[derive(Debug, Deserialize)]
-struct JsonRpcError {
-    #[allow(dead_code)]
-    code: i64,
-    message: String,
-}
 
 /// Transaction status in Soroban.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -152,8 +126,7 @@ pub struct GetTransactionResponse {
 impl SorobanRpcClient {
     /// Create a new `SorobanRpcClient` from a [`NetworkConfig`].
     ///
-    /// Initialises a [`reqwest::Client`] with a 30-second timeout and sets the
-    /// `Content-Type: application/json` header on every request.
+    /// Initialises a [`reqwest::Client`] matching the config's timeout or defaults to 30s.
     pub fn new(config: &NetworkConfig) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -168,6 +141,18 @@ impl SorobanRpcClient {
             client,
             rpc_url: config.rpc_url.clone(),
         }
+    }
+
+    /// Update the timeout for the client in seconds.
+    pub fn with_timeout(mut self, timeout_secs: u64) -> Self {
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        self.client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(timeout_secs))
+            .default_headers(headers)
+            .build()
+            .expect("Failed to build reqwest client");
+        self
     }
 
     /// Fetch a transaction by hash.
@@ -243,15 +228,10 @@ impl SorobanRpcClient {
     /// Internal JSON-RPC call with retry and rate-limit backoff.
     async fn call<T: for<'de> Deserialize<'de>>(
         &self,
-        method: &str,
+        method: &'static str,
         params: serde_json::Value,
     ) -> PrismResult<T> {
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0",
-            id: 1,
-            method,
-            params,
-        };
+        let request = JsonRpcRequest::new(1, method, params);
 
         const MAX_RETRIES: u32 = 3;
         let mut last_error: Option<PrismError> = None;

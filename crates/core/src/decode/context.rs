@@ -3,7 +3,7 @@
 //! Decodes the full transaction envelope: called function, decoded arguments,
 //! auth requirements, resource footprint, and fee breakdown.
 
-use crate::types::error::PrismResult;
+use crate::error::PrismResult;
 use crate::types::report::{DiagnosticReport, FeeBreakdown, ResourceSummary, TransactionContext};
 
 /// Enrich a diagnostic report with full transaction context.

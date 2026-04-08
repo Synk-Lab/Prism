@@ -5,7 +5,7 @@
 //! - **Cold path:** Fall back to Stellar History Archives for older transactions
 
 use crate::types::config::NetworkConfig;
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 use std::collections::HashMap;
 
 /// Reconstructed ledger state at a specific sequence number.
@@ -33,7 +33,7 @@ const HOT_PATH_THRESHOLD: u32 = 50_000;
 
 /// Reconstruct ledger state at the time of a transaction.
 pub async fn reconstruct_state(tx_hash: &str, network: &NetworkConfig) -> PrismResult<LedgerState> {
-    let rpc = crate::network::rpc::SorobanRpcClient::new(network);
+    let rpc = crate::rpc::SorobanRpcClient::new(network);
 
     // 1. Fetch the transaction to determine its ledger sequence
     let tx_data = rpc.get_transaction(tx_hash).await?;
@@ -63,7 +63,7 @@ pub async fn reconstruct_state(tx_hash: &str, network: &NetworkConfig) -> PrismR
 /// Hot path: reconstruct state from Soroban RPC.
 async fn reconstruct_hot_path(
     ledger_sequence: u32,
-    _rpc: &crate::network::rpc::SorobanRpcClient,
+    _rpc: &crate::rpc::SorobanRpcClient,
 ) -> PrismResult<LedgerState> {
     // TODO: Use getLedgerEntries to fetch all entries in the transaction's footprint
     Ok(LedgerState {

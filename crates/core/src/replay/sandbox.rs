@@ -5,7 +5,7 @@
 //! boundary to emit trace events.
 
 use crate::replay::state::LedgerState;
-use crate::types::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult};
 
 /// A raw trace event emitted during sandboxed execution.
 #[derive(Debug, Clone, serde::Serialize)]

@@ -2,7 +2,7 @@
 
 use prism_core::types::report::DiagnosticReport;
 
-use crate::output::renderers::{render_section_header, render_error_card, BudgetBar};
+use crate::output::renderers::{render_section_header, render_error_card, render_fix_list, BudgetBar};
 
 /// Print a diagnostic report in human-readable colored format.
 pub fn print_report(report: &DiagnosticReport) -> anyhow::Result<()> {
@@ -38,6 +38,11 @@ pub fn print_report(report: &DiagnosticReport) -> anyhow::Result<()> {
             )
             .render()
         );
+    }
+
+    if !report.suggested_fixes.is_empty() {
+        println!();
+        println!("{}", render_fix_list(&report.suggested_fixes));
     }
 
     Ok(())

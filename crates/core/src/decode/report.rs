@@ -5,7 +5,7 @@
 
 use crate::decode::host_error::ClassifiedError;
 use crate::taxonomy::loader::TaxonomyDatabase;
-use crate::types::error::PrismResult;
+use crate::error::PrismResult;
 use crate::types::report::{DiagnosticReport, RootCause, Severity, SuggestedFix};
 
 /// Build a diagnostic report from a classified error.
@@ -43,6 +43,8 @@ pub fn build_report(error: &ClassifiedError) -> PrismResult<DiagnosticReport> {
                     difficulty: f.difficulty.clone(),
                     requires_upgrade: f.requires_upgrade,
                     example: f.example.clone(),
+                    id: f.id.clone().unwrap_or_else(|| "unknown".to_string()),
+                    remedy_code: f.remedy_code.clone(),
                 })
                 .collect(),
             contract_error: None,

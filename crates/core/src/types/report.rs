@@ -32,6 +32,10 @@ pub struct SuggestedFix {
     pub requires_upgrade: bool,
     /// Optional code example or reference.
     pub example: Option<String>,
+    /// Unique identifier for this fix.
+    pub id: String,
+    /// Automated remedy code, if available.
+    pub remedy_code: Option<String>,
 }
 
 /// Decoded contract-specific error information.
