@@ -43,6 +43,8 @@ pub fn build_report(error: &ClassifiedError) -> PrismResult<DiagnosticReport> {
                     difficulty: f.difficulty.clone(),
                     requires_upgrade: f.requires_upgrade,
                     example: f.example.clone(),
+                    id: f.id.clone().unwrap_or_else(|| "unknown".to_string()),
+                    remedy_code: f.remedy_code.clone(),
                 })
                 .collect(),
             contract_error: None,

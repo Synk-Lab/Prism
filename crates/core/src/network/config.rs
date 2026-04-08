@@ -4,6 +4,7 @@
 //! mainnet/testnet/futurenet/custom networks.
 
 use crate::error::{PrismError, PrismResult};
+use crate::rpc::jsonrpc::{JsonRpcTransport, JsonRpcRequest, GetHealthParams};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -160,6 +161,8 @@ pub struct NetworkConfig {
     pub archive_urls: Vec<String>,
     /// Optional API key for authenticating RPC requests.
     pub api_key: Option<String>,
+    /// Per-request timeout in seconds for all RPC calls.
+    pub request_timeout_secs: u64,
 }
 
 impl NetworkConfig {
@@ -174,6 +177,7 @@ impl NetworkConfig {
                 .map(|url| (*url).to_string())
                 .collect(),
             api_key: None,
+            request_timeout_secs: 30,
         }
     }
 
@@ -188,6 +192,7 @@ impl NetworkConfig {
                 .map(|url| (*url).to_string())
                 .collect(),
             api_key: None,
+            request_timeout_secs: 30,
         }
     }
 
@@ -202,6 +207,7 @@ impl NetworkConfig {
                 .map(|url| (*url).to_string())
                 .collect(),
             api_key: None,
+            request_timeout_secs: 30,
         }
     }
 
@@ -213,6 +219,7 @@ impl NetworkConfig {
             network_passphrase: LOCAL_PASSPHRASE.to_string(),
             archive_urls: Vec::new(),
             api_key: None,
+            request_timeout_secs: 30,
         }
     }
 
@@ -228,6 +235,7 @@ impl NetworkConfig {
             network_passphrase: passphrase.into(),
             archive_urls: Vec::new(),
             api_key: None,
+            request_timeout_secs: 30,
         }
     }
 

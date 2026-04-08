@@ -199,13 +199,13 @@ fn select_provider_interactive() -> Result<String> {
 
 /// Interactively select a provider for logout (including those with stored credentials).
 fn select_provider_for_logout() -> Result<String> {
-    let mut items = vec!["Blockdaemon", "NowNodes", "Custom"];
+    let mut items: Vec<String> = vec!["Blockdaemon".to_string(), "NowNodes".to_string(), "Custom".to_string()];
     
     // Try to load existing credentials to show which providers have stored keys
     if let Ok(config) = load_auth_config(None) {
         for provider in config.credentials.keys() {
-            if !items.contains(&provider.as_str()) {
-                items.push(provider);
+            if !items.iter().any(|i| i == provider) {
+                items.push(provider.to_string());
             }
         }
     }
@@ -278,6 +278,7 @@ async fn remove_credential(provider: &str, config_path: Option<String>) -> Resul
 }
 
 /// Retrieve a credential from config file.
+#[allow(dead_code)]
 pub fn get_credential(provider: &str) -> Result<Option<String>> {
     let normalized_provider = normalize_provider_name(provider);
     
@@ -287,6 +288,7 @@ pub fn get_credential(provider: &str) -> Result<Option<String>> {
 
 
 /// Get credential from config file.
+#[allow(dead_code)]
 fn get_credential_config(provider: &str) -> Result<Option<String>> {
     let config_file = get_config_path(None)?;
     let config = load_auth_config(Some(&config_file)).unwrap_or_default();
@@ -295,7 +297,14 @@ fn get_credential_config(provider: &str) -> Result<Option<String>> {
 
 /// Load auth configuration from file.
 fn load_auth_config(config_file: Option<&PathBuf>) -> Result<AuthConfig> {
-    let config_file = config_file.as_ref().unwrap_or(&get_config_path(None)?);
+    let default_path;
+    let config_file = match config_file {
+        Some(p) => p,
+        None => {
+            default_path = get_config_path(None)?;
+            &default_path
+        }
+    };
     
     if !config_file.exists() {
         return Ok(AuthConfig::default());

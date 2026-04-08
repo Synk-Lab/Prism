@@ -86,7 +86,7 @@ pub fn print_state_diff(diff: &StateDiff, output_format: &str) -> anyhow::Result
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(diff)?),
         OutputFormat::Short => println!("{}", format_state_diff_summary(diff)),
         OutputFormat::Human => {
-            let palette = theme::ColorPalette::default();
+            let _palette = theme::ColorPalette::default();
             println!("{}", renderers::render_section_header("State Differential"));
             println!("{}", renderers::render_state_diff_table(diff));
             println!();

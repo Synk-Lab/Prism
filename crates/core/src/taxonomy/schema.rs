@@ -60,6 +60,10 @@ pub struct TaxonomyFix {
     pub requires_upgrade: bool,
     /// Optional code example.
     pub example: Option<String>,
+    /// Unique identifier for this fix.
+    pub id: Option<String>,
+    /// Automated remedy code, if available.
+    pub remedy_code: Option<String>,
 }
 
 /// Soroban host error categories.

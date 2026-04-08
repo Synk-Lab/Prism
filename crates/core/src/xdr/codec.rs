@@ -5,10 +5,9 @@
 
 use crate::error::{PrismError, PrismResult};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use stellar_xdr::{
-    DecoratedSignature, LedgerEntry, Limits, Memo, MuxedAccount, Operation, Preconditions, ReadXdr, 
-    SequenceNumber, Transaction, TransactionEnvelope, TransactionExt, TransactionMeta, 
-    TransactionV1Envelope, Uint256, WriteXdr, TransactionResult,
+use stellar_xdr::curr::{
+    LedgerEntry, Limits, ReadXdr, TransactionEnvelope, TransactionMeta, 
+    WriteXdr, TransactionResult,
 };
 
 /// Uniform base64-XDR encode/decode interface for Stellar XDR types.
@@ -149,6 +148,10 @@ pub fn decode_tx_hash(hash_hex: &str) -> PrismResult<[u8; 32]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stellar_xdr::curr::{
+        Memo, MuxedAccount, Preconditions, SequenceNumber, Transaction, 
+        TransactionExt, TransactionV1Envelope, Uint256,
+    };
 
     fn make_test_envelope() -> TransactionEnvelope {
         TransactionEnvelope::Tx(TransactionV1Envelope {

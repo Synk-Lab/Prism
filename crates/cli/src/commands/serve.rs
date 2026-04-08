@@ -1,9 +1,11 @@
 use axum::{
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Path, State},
     response::{Html, IntoResponse},
-    routing::{get, post},
+    routing::get,
     Router,
 };
+use clap::Args;
+use futures_util::{SinkExt, StreamExt as _};
 use prism_core::types::config::NetworkConfig;
 use std::net::SocketAddr;
 use std::sync::Arc;

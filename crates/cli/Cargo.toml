@@ -14,6 +14,8 @@ path = "src/main.rs"
 prism-core = { workspace = true }
 fs2     = "0.4"
 walkdir = "2"
+reqwest = { workspace = true }
+libc = { workspace = true }
 
 # CLI Framework
 clap = { workspace = true }

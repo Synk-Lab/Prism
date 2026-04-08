@@ -128,7 +128,7 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let update_check_handle = tokio::spawn(version_check::check_for_updates());
+    let _update_check_handle = tokio::spawn(version_check::check_for_updates());
 
     let version: &'static str = Box::leak(build_version().into_boxed_str());
     let matches = Cli::command().version(version).get_matches();
