@@ -85,6 +85,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    // --- Analysis Commands ---
+    #[command(next_help_heading = "Analysis Commands")]
     /// Decode a transaction error into plain English.
     Decode(commands::decode::DecodeArgs),
     /// Inspect full transaction context.
@@ -95,18 +97,33 @@ enum Commands {
     Profile(commands::profile::ProfileArgs),
     /// Show state diff (before/after) for a transaction.
     Diff(commands::diff::DiffArgs),
+
+    // --- Debug & TUI Commands ---
+    #[command(next_help_heading = "Debug & TUI Commands")]
     /// Launch interactive TUI debugger.
     Replay(commands::replay::ReplayArgs),
     /// Re-simulate with modified inputs.
     Whatif(commands::whatif::WhatifArgs),
     /// Export debug session as a regression test.
     Export(commands::export::ExportArgs),
-    /// Clear local cache data.
-    Clean(commands::clean::CleanArgs),
+
+    // --- System & Data Commands ---
+    #[command(next_help_heading = "System & Data Commands")]
     /// Manage the error taxonomy database.
     Db(commands::db::DbArgs),
+    /// Clear local cache data.
+    Clean(commands::clean::CleanArgs),
     /// Manage API credentials for hosted services.
     Auth(commands::auth::AuthArgs),
+    /// Run health and connectivity diagnostics.
+    Diagnostic(commands::diagnostic::DiagnosticArgs),
+    /// Generate shell completion scripts.
+    Completions {
+        /// The shell to generate completions for.
+        shell: clap_complete::Shell,
+    },
+    /// Start the instrumentation server.
+    Serve(commands::serve::ServeArgs),
 }
 
 #[tokio::main]
@@ -173,6 +190,13 @@ async fn main() -> anyhow::Result<()> {
         Commands::Clean(args) => commands::clean::run(args, &cli.output).await?,
         Commands::Db(args) => commands::db::run(args, &cli.output).await?,
         Commands::Auth(args) => commands::auth::run(args, &cli.output).await?,
+        Commands::Diagnostic(args) => commands::diagnostic::run(args).await?,
+        Commands::Serve(args) => commands::serve::run(args, &network).await?,
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+            let name = cmd.get_name().to_string();
+            clap_complete::generate(shell, &mut cmd, name, &mut std::io::stdout());
+        }
     }
 
     Ok(())

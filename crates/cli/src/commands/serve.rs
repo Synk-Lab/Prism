@@ -1,14 +1,14 @@
-//! `prism serve` — Start WebSocket server for streaming trace updates.
-
-use clap::Args;
-use futures_util::{SinkExt, StreamExt};
-use prism_core::network::rpc::SorobanRpcClient;
+use axum::{
+    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Path, State},
+    response::{Html, IntoResponse},
+    routing::{get, post},
+    Router,
+};
 use prism_core::types::config::NetworkConfig;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::broadcast;
-use tokio_tungstenite::{accept_async, tungstenite::Message};
+use tower_http::services::ServeDir;
+use tower_http::trace::TraceLayer;
 
 #[derive(Args)]
 pub struct ServeArgs {
@@ -54,94 +54,116 @@ pub enum TraceStreamMessage {
 }
 
 pub async fn run(args: ServeArgs, network: &NetworkConfig) -> anyhow::Result<()> {
+    let network = Arc::new(network.clone());
     let addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;
-    let listener = TcpListener::bind(&addr).await?;
 
-    println!("🚀 Prism WebSocket server listening on ws://{}", addr);
-    println!("   Ready to stream trace updates to connected clients");
+    // Initialize API Bridge Router
+    let api_router = Router::new()
+        .route("/trace/:tx_hash", get(get_trace_api))
+        .with_state(Arc::clone(&network));
+
+    // Initialize Static File Server
+    let static_dir = get_static_assets_path();
+    let static_service = if static_dir.exists() {
+        tracing::info!("Serving web app from {}", static_dir.display());
+        ServeDir::new(static_dir)
+    } else {
+        tracing::warn!("Web app assets not found at {}. Serving placeholder.", static_dir.display());
+        // Simple placeholder service could be here
+        ServeDir::new(".") // Fallback to current dir for now
+    };
+
+    // Main Router
+    let app = Router::new()
+        .route("/", get(index_handler))
+        .nest("/api", api_router)
+        .route("/ws", get(ws_handler))
+        .fallback_service(static_service)
+        .layer(TraceLayer::new_for_http())
+        .with_state(Arc::clone(&network));
+
+    println!("🚀 Prism instrumentation server starting...");
+    println!("   URL: http://{}", addr);
+    println!("   WebSocket: ws://{}/ws", addr);
+    println!("   API Bridge: http://{}/api/trace/<tx_hash>", addr);
     println!("   Press Ctrl+C to stop");
 
-    let network = Arc::new(network.clone());
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
 
-    loop {
-        match listener.accept().await {
-            Ok((stream, peer_addr)) => {
+    Ok(())
+}
+
+async fn index_handler() -> Html<&'static str> {
+    Html(r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Prism | instrumentation</title>
+            <style>
+                body { background: #0f172a; color: #f8fafc; font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+                .card { background: #1e293b; padding: 2rem; border-radius: 1rem; border: 1px solid #334155; text-align: center; }
+                h1 { color: #38bdf8; margin: 0 0 1rem; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Prism Instrumentation</h1>
+                <p>The web dashboard is being served. Connect your front-end to <code>/ws</code> or use the <code>/api</code> endpoints.</p>
+            </div>
+        </body>
+        </html>
+    "#)
+}
+
+async fn get_trace_api(
+    Path(tx_hash): Path<String>,
+    State(network): State<Arc<NetworkConfig>>,
+) -> impl IntoResponse {
+    match prism_core::replay::replay_transaction(&tx_hash, &network).await {
+        Ok(trace) => axum::Json(trace).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Trace failed: {}", e),
+        ).into_response(),
+    }
+}
+
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    State(network): State<Arc<NetworkConfig>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_ws_connection(socket, network))
+}
+
+async fn handle_ws_connection(socket: WebSocket, network: Arc<NetworkConfig>) {
+    let (mut sender, mut receiver) = socket.split();
+
+    while let Some(Ok(msg)) = receiver.next().await {
+        if let Message::Text(text) = msg {
+            if let Ok(request) = serde_json::from_str::<TraceRequest>(&text) {
+                let (tx, mut rx) = tokio::sync::broadcast::channel::<TraceStreamMessage>(100);
+                let tx_hash = request.tx_hash.clone();
                 let network = Arc::clone(&network);
-                tokio::spawn(handle_connection(stream, peer_addr, network));
-            }
-            Err(e) => {
-                tracing::error!("Failed to accept connection: {}", e);
+
+                tokio::spawn(async move {
+                    let _ = stream_trace_replay(&tx_hash, &network, tx).await;
+                });
+
+                while let Ok(update) = rx.recv().await {
+                    let json = serde_json::to_string(&update).unwrap();
+                    if sender.send(Message::Text(json)).await.is_err() {
+                        break;
+                    }
+                }
             }
         }
     }
 }
 
-async fn handle_connection(stream: TcpStream, peer_addr: SocketAddr, network: Arc<NetworkConfig>) {
-    tracing::info!("New WebSocket connection from {}", peer_addr);
-
-    let ws_stream = match accept_async(stream).await {
-        Ok(ws) => ws,
-        Err(e) => {
-            tracing::error!("WebSocket handshake failed: {}", e);
-            return;
-        }
-    };
-
-    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-
-    while let Some(msg) = ws_receiver.next().await {
-        match msg {
-            Ok(Message::Text(text)) => {
-                if let Ok(request) = serde_json::from_str::<TraceRequest>(&text) {
-                    tracing::info!("Received trace request for tx: {}", request.tx_hash);
-
-                    let (tx, mut rx) = broadcast::channel::<TraceStreamMessage>(100);
-
-                    let tx_hash = request.tx_hash.clone();
-                    let network = Arc::clone(&network);
-                    tokio::spawn(async move {
-                        if let Err(e) = stream_trace_replay(&tx_hash, &network, tx).await {
-                            tracing::error!("Trace replay failed: {}", e);
-                        }
-                    });
-
-                    while let Ok(update) = rx.recv().await {
-                        let json = match serde_json::to_string(&update) {
-                            Ok(j) => j,
-                            Err(e) => {
-                                tracing::error!("Failed to serialize trace update: {}", e);
-                                continue;
-                            }
-                        };
-
-                        if let Err(e) = ws_sender.send(Message::Text(json)).await {
-                            tracing::error!("Failed to send WebSocket message: {}", e);
-                            break;
-                        }
-                    }
-                } else {
-                    tracing::warn!("Invalid trace request: {}", text);
-                }
-            }
-            Ok(Message::Close(_)) => {
-                tracing::info!("Client {} closed connection", peer_addr);
-                break;
-            }
-            Ok(Message::Ping(data)) => {
-                if let Err(e) = ws_sender.send(Message::Pong(data)).await {
-                    tracing::error!("Failed to send pong: {}", e);
-                    break;
-                }
-            }
-            Err(e) => {
-                tracing::error!("WebSocket error: {}", e);
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    tracing::info!("Connection closed: {}", peer_addr);
+fn get_static_assets_path() -> std::path::PathBuf {
+    let dirs = directories::ProjectDirs::from("com", "toolbox-lab", "prism").unwrap();
+    dirs.data_dir().join("web")
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -152,7 +174,7 @@ struct TraceRequest {
 async fn stream_trace_replay(
     tx_hash: &str,
     network: &NetworkConfig,
-    sender: broadcast::Sender<TraceStreamMessage>,
+    sender: tokio::sync::broadcast::Sender<TraceStreamMessage>,
 ) -> anyhow::Result<()> {
     use std::time::Instant;
 
