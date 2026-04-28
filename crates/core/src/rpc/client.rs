@@ -404,6 +404,108 @@ mod tests {
         assert!(result.is_success());
     }
 
+    #[test]
+    fn test_get_transaction_success_status() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "status": "SUCCESS",
+                "latestLedger": 500,
+                "latestLedgerCloseTime": 1711620000,
+                "oldestLedger": 100,
+                "oldestLedgerCloseTime": 1711610000,
+                "ledger": 450,
+                "createdAt": "2024-03-28T10:00:00Z",
+                "applicationOrder": 2,
+                "envelopeXdr": "AAAAAgAAAABqYWNrQGV4YW1wbGUuY29tAAABkA==",
+                "resultXdr": "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAA=",
+                "resultMetaXdr": "AAAAAwAAAAAAAAACAAAAAwAAAcQAAAAAAAAAAA=="
+            }
+        }"#;
+
+        let resp: JsonRpcResponse<GetTransactionResponse> = serde_json::from_str(json).unwrap();
+        let result = resp.result.unwrap();
+
+        assert_eq!(result.status, TransactionStatus::Success);
+        assert_eq!(result.latest_ledger, 500);
+        assert_eq!(result.latest_ledger_close_time, Some(1711620000));
+        assert_eq!(result.oldest_ledger, Some(100));
+        assert_eq!(result.oldest_ledger_close_time, Some(1711610000));
+        assert_eq!(result.ledger, Some(450));
+        assert_eq!(result.created_at, Some("2024-03-28T10:00:00Z".to_string()));
+        assert_eq!(result.application_order, Some(2));
+        assert_eq!(result.envelope_xdr, Some("AAAAAgAAAABqYWNrQGV4YW1wbGUuY29tAAABkA==".to_string()));
+        assert_eq!(result.result_xdr, Some("AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAA=".to_string()));
+        assert_eq!(result.result_meta_xdr, Some("AAAAAwAAAAAAAAACAAAAAwAAAcQAAAAAAAAAAA==".to_string()));
+    }
+
+    #[test]
+    fn test_get_transaction_not_found_status() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "status": "NOT_FOUND",
+                "latestLedger": 600,
+                "latestLedgerCloseTime": 1711625000,
+                "oldestLedger": 200,
+                "oldestLedgerCloseTime": 1711615000
+            }
+        }"#;
+
+        let resp: JsonRpcResponse<GetTransactionResponse> = serde_json::from_str(json).unwrap();
+        let result = resp.result.unwrap();
+
+        assert_eq!(result.status, TransactionStatus::NotFound);
+        assert_eq!(result.latest_ledger, 600);
+        assert_eq!(result.latest_ledger_close_time, Some(1711625000));
+        assert_eq!(result.oldest_ledger, Some(200));
+        assert_eq!(result.oldest_ledger_close_time, Some(1711615000));
+        assert_eq!(result.ledger, None);
+        assert_eq!(result.created_at, None);
+        assert_eq!(result.application_order, None);
+        assert_eq!(result.envelope_xdr, None);
+        assert_eq!(result.result_xdr, None);
+        assert_eq!(result.result_meta_xdr, None);
+    }
+
+    #[test]
+    fn test_get_transaction_failed_status() {
+        let json = r#"{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "status": "FAILED",
+                "latestLedger": 700,
+                "latestLedgerCloseTime": 1711630000,
+                "oldestLedger": 300,
+                "oldestLedgerCloseTime": 1711620000,
+                "ledger": 650,
+                "createdAt": "2024-03-28T11:00:00Z",
+                "applicationOrder": 5,
+                "envelopeXdr": "AAAAAgAAAABmYWlsZWRAdHguY29tAAABkA==",
+                "resultXdr": "AAAAAAAAAGT////7AAAAAA==",
+                "resultMetaXdr": "AAAAAwAAAAAAAAACAAAAAwAAAoYAAAAAAAAAAA=="
+            }
+        }"#;
+
+        let resp: JsonRpcResponse<GetTransactionResponse> = serde_json::from_str(json).unwrap();
+        let result = resp.result.unwrap();
+
+        assert_eq!(result.status, TransactionStatus::Failed);
+        assert_eq!(result.latest_ledger, 700);
+        assert_eq!(result.latest_ledger_close_time, Some(1711630000));
+        assert_eq!(result.oldest_ledger, Some(300));
+        assert_eq!(result.oldest_ledger_close_time, Some(1711620000));
+        assert_eq!(result.ledger, Some(650));
+        assert_eq!(result.created_at, Some("2024-03-28T11:00:00Z".to_string()));
+        assert_eq!(result.application_order, Some(5));
+        assert_eq!(result.envelope_xdr, Some("AAAAAgAAAABmYWlsZWRAdHguY29tAAABkA==".to_string()));
+        assert_eq!(result.result_xdr, Some("AAAAAAAAAGT////7AAAAAA==".to_string()));
+        assert_eq!(result.result_meta_xdr, Some("AAAAAwAAAAAAAAACAAAAAwAAAoYAAAAAAAAAAA==".to_string()));
+    }
+
     #[tokio::test]
     async fn test_get_ledger_entries_empty_response() {
         use tokio::io::AsyncWriteExt;
