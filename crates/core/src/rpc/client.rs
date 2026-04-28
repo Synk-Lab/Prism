@@ -5,6 +5,7 @@
 //! basic rate-limit backoff.
 
 use crate::rpc::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
+use crate::rpc::metrics;
 use crate::network::NetworkConfig;
 use crate::error::{PrismError, PrismResult};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
@@ -251,6 +252,12 @@ impl SorobanRpcClient {
                     let status = response.status();
                     let elapsed_ms = started.elapsed().as_millis();
                     let body = response.text().await.map_err(|e| {
+                        // Body-read failure: record as an error before propagating.
+                        metrics::record_rpc_duration(
+                            method,
+                            started.elapsed().as_secs_f64(),
+                            false,
+                        );
                         PrismError::RpcError(format!("Failed to read response body: {e}"))
                     })?;
 
@@ -265,19 +272,39 @@ impl SorobanRpcClient {
 
                     if status == 429 {
                         tracing::warn!(method, "Rate limited by RPC node, backing off");
+                        // Rate-limit counts as a failed attempt for metrics.
+                        metrics::record_rpc_duration(
+                            method,
+                            started.elapsed().as_secs_f64(),
+                            false,
+                        );
                         last_error =
                             Some(PrismError::RpcError("Rate limited (HTTP 429)".to_string()));
                         continue;
                     }
 
                     if !status.is_success() {
+                        metrics::record_rpc_duration(
+                            method,
+                            started.elapsed().as_secs_f64(),
+                            false,
+                        );
                         return Err(PrismError::RpcError(format!(
                             "RPC request failed with HTTP {}: {}",
                             status, body
                         )));
                     }
+
                     let rpc_response: JsonRpcResponse<T> = serde_json::from_str(&body)
-                        .map_err(|e| PrismError::RpcError(format!("Response parse error: {e}")))?;
+                        .map_err(|e| {
+                            // JSON parse failure: record as an error before propagating.
+                            metrics::record_rpc_duration(
+                                method,
+                                started.elapsed().as_secs_f64(),
+                                false,
+                            );
+                            PrismError::RpcError(format!("Response parse error: {e}"))
+                        })?;
 
                     if let Some(err) = rpc_response.error {
                         tracing::debug!(
@@ -287,12 +314,25 @@ impl SorobanRpcClient {
                             error = %err.message,
                             "RPC returned an error response"
                         );
+                        // Application-level RPC error returned by the node.
+                        metrics::record_rpc_duration(
+                            method,
+                            started.elapsed().as_secs_f64(),
+                            false,
+                        );
                         return Err(PrismError::RpcError(err.message));
                     }
 
-                    return rpc_response.result.ok_or_else(|| {
+                    // Resolve the result field; record success/failure accordingly.
+                    let result = rpc_response.result.ok_or_else(|| {
                         PrismError::RpcError("Empty result in RPC response".into())
                     });
+                    metrics::record_rpc_duration(
+                        method,
+                        started.elapsed().as_secs_f64(),
+                        result.is_ok(),
+                    );
+                    return result;
                 }
                 Err(e) => {
                     tracing::debug!(
@@ -302,6 +342,12 @@ impl SorobanRpcClient {
                         elapsed_ms = started.elapsed().as_millis(),
                         error = %e,
                         "RPC request failed"
+                    );
+                    // Network-level failure (connection refused, timeout, etc.).
+                    metrics::record_rpc_duration(
+                        method,
+                        started.elapsed().as_secs_f64(),
+                        false,
                     );
                     last_error = Some(PrismError::RpcError(format!("HTTP request failed: {e}")));
                 }
