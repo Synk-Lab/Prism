@@ -7,9 +7,18 @@
 use crate::error::{PrismError, PrismResult};
 use crate::network::NetworkConfig;
 use crate::rpc::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
+
+const USER_AGENT_VALUE: &str = concat!("prism-sdk-rust/", env!("CARGO_PKG_VERSION"));
+
+fn default_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_VALUE));
+    headers
+}
 
 // ── simulateTransaction response types ──────────────────────────────────────
 
@@ -126,12 +135,9 @@ impl SorobanRpcClient {
     ///
     /// Initialises a [`reqwest::Client`] matching the config's timeout or defaults to 30s.
     pub fn new(config: &NetworkConfig) -> Self {
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
-            .default_headers(headers)
+            .default_headers(default_headers())
             .build()
             .expect("Failed to build reqwest client");
 
@@ -143,11 +149,9 @@ impl SorobanRpcClient {
 
     /// Update the timeout for the client in seconds.
     pub fn with_timeout(mut self, timeout_secs: u64) -> Self {
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         self.client = reqwest::Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
-            .default_headers(headers)
+            .default_headers(default_headers())
             .build()
             .expect("Failed to build reqwest client");
         self
@@ -373,6 +377,18 @@ mod tests {
             let got: TransactionStatus = serde_json::from_str(raw).unwrap();
             assert_eq!(got, expected);
         }
+    }
+
+    #[test]
+    fn default_headers_include_user_agent() {
+        let headers = default_headers();
+
+        assert_eq!(
+            headers
+                .get(USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some(USER_AGENT_VALUE)
+        );
     }
 
     #[test]
