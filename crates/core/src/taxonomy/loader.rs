@@ -3,9 +3,21 @@
 //! Loads TOML taxonomy files from embedded data or disk, indexes them by
 //! (category, code) for O(1) lookup.
 
-use crate::taxonomy::schema::{ErrorCategory, TaxonomyEntry, TaxonomyFile};
+use crate::taxonomy::schema::{ErrorCategory, TaxonomyEntry, TaxonomySchema};
 use crate::error::{PrismError, PrismResult};
 use std::collections::HashMap;
+
+/// A parser for TOML taxonomy definitions.
+pub struct TaxonomyParser;
+
+impl TaxonomyParser {
+    /// Parses a TOML string into a `TaxonomySchema`.
+    pub fn parse(input: &str) -> PrismResult<TaxonomySchema> {
+        toml::from_str(input).map_err(|e| {
+            PrismError::TaxonomyError(format!("TOML parse error: {e}"))
+        })
+    }
+}
 
 /// In-memory taxonomy database indexed by (category, code).
 pub struct TaxonomyDatabase {
@@ -38,9 +50,9 @@ impl TaxonomyDatabase {
         ];
 
         for (name, content) in categories {
-            match toml::from_str::<TaxonomyFile>(content) {
-                Ok(file) => {
-                    for entry in file.errors {
+            match TaxonomyParser::parse(content) {
+                Ok(schema) => {
+                    for entry in schema.errors {
                         db.entries
                             .insert((entry.category.clone(), entry.code), entry.clone());
                         db.all_entries.push(entry);
@@ -74,11 +86,11 @@ impl TaxonomyDatabase {
                     PrismError::TaxonomyError(format!("Cannot read {}: {e}", path.display()))
                 })?;
 
-                let file: TaxonomyFile = toml::from_str(&content).map_err(|e| {
+                let schema = TaxonomyParser::parse(&content).map_err(|e| {
                     PrismError::TaxonomyError(format!("Parse error in {}: {e}", path.display()))
                 })?;
 
-                for entry in file.errors {
+                for entry in schema.errors {
                     db.entries
                         .insert((entry.category.clone(), entry.code), entry.clone());
                     db.all_entries.push(entry);
@@ -110,5 +122,46 @@ impl TaxonomyDatabase {
     /// Check if the database is empty.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_taxonomy_success() {
+        let toml = r#"
+            [category]
+            name = "budget"
+            description = "Resource budget errors"
+            source_module = "soroban-env-host"
+
+            [[errors]]
+            id = "host.budget.limit_exceeded.cpu"
+            category = "budget"
+            code = 1
+            name = "CpuLimitExceeded"
+            severity = "error"
+            summary = "CPU limit exceeded"
+            detailed_explanation = "The contract used more CPU than allowed."
+            common_causes = []
+            suggested_fixes = []
+            related_errors = []
+        "#;
+
+        let result = TaxonomyParser::parse(toml);
+        assert!(result.is_ok());
+        let schema = result.unwrap();
+        assert_eq!(schema.category.name, "budget");
+        assert_eq!(schema.errors.len(), 1);
+        assert_eq!(schema.errors[0].name, "CpuLimitExceeded");
+    }
+
+    #[test]
+    fn test_load_taxonomy_invalid() {
+        let toml = "invalid toml = [[";
+        let result = TaxonomyParser::parse(toml);
+        assert!(result.is_err());
     }
 }
