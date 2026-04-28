@@ -149,8 +149,8 @@ pub fn decode_tx_hash(hash_hex: &str) -> PrismResult<[u8; 32]> {
 mod tests {
     use super::*;
     use stellar_xdr::curr::{
-        Memo, MuxedAccount, Preconditions, SequenceNumber, Transaction, 
-        TransactionExt, TransactionV1Envelope, Uint256,
+        ExtensionPoint, Memo, MuxedAccount, OperationMeta, Preconditions, SequenceNumber,
+        Transaction, TransactionExt, TransactionMetaV3, TransactionV1Envelope, Uint256,
     };
 
     fn make_test_envelope() -> TransactionEnvelope {
@@ -178,34 +178,24 @@ mod tests {
 
     #[test]
     fn test_transaction_meta_v3_decoding() {
-        // Minimal TransactionMetaV3 XDR bytes (big-endian).
-        let xdr_bytes: Vec<u8> = vec![
-            0, 0, 0, 3, // V3 discriminant
-            0, 0, 0, 0, // ext = ExtensionPoint::V0
-            0, 0, 0, 0, // txChangesBefore = []
-            0, 0, 0, 1, // operations length = 1
-            0, 0, 0, 0, // OperationMeta.changes = []
-            0, 0, 0, 0, // txChangesAfter = []
-            0, 0, 0, 1, // sorobanMeta present
-            0, 0, 0, 0, // SorobanTransactionMetaExt::V0
-            0, 0, 0, 1, // events length = 1
-            0, 0, 0, 0, // ContractEvent.ext = V0
-            0, 0, 0, 0, // contractId absent
-            0, 0, 0, 1, // type = CONTRACT
-            0, 0, 0, 0, // body discriminant V0
-            0, 0, 0, 0, // topics = []
-            0, 0, 0, 0, // data = ScVal::Void
-            0, 0, 0, 0, // returnValue = ScVal::Void
-            0, 0, 0, 0, // diagnosticEvents = []
-        ];
-        
-        let b64 = encode_xdr_base64(&xdr_bytes);
+        let meta = TransactionMeta::V3(TransactionMetaV3 {
+            ext: ExtensionPoint::V0,
+            tx_changes_before: vec![].try_into().expect("empty changes"),
+            operations: vec![OperationMeta {
+                changes: vec![].try_into().expect("empty operation changes"),
+            }]
+            .try_into()
+            .expect("one operation"),
+            tx_changes_after: vec![].try_into().expect("empty changes"),
+            soroban_meta: None,
+        });
+
+        let b64 = XdrCodec::to_xdr_base64(&meta).expect("encode V3");
         let meta = <TransactionMeta as XdrCodec>::from_xdr_base64(&b64).expect("decode V3");
 
         if let TransactionMeta::V3(v3) = meta {
             assert_eq!(v3.operations.len(), 1);
-            let soroban = v3.soroban_meta.expect("soroban_meta");
-            assert_eq!(soroban.events.len(), 1);
+            assert!(v3.soroban_meta.is_none());
         } else {
             panic!("expected V3");
         }

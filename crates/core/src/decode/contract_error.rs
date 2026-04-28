@@ -3,9 +3,10 @@
 //! Fetches WASM bytecode from the ledger, parses contractspecv0 metadata,
 //! and maps numeric error codes to named enum variants.
 
-use crate::spec::decoder;
-use crate::types::config::NetworkConfig;
 use crate::error::{PrismError, PrismResult};
+use crate::spec::decoder;
+use crate::types::address::Address;
+use crate::types::config::NetworkConfig;
 use crate::types::report::ContractErrorInfo;
 
 /// Resolve a contract-specific error code to its named variant.
@@ -20,6 +21,8 @@ pub async fn resolve(
     error_code: u32,
     network: &NetworkConfig,
 ) -> PrismResult<ContractErrorInfo> {
+    Address::validate_contract_id(contract_id)?;
+
     // 1. Check cache first
     let cache = crate::cache::store::CacheStore::default_location()?;
     let cache_key = format!("{contract_id}_spec");
