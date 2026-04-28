@@ -6,7 +6,7 @@
 use crate::error::{PrismError, PrismResult};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use stellar_xdr::curr::{
-    LedgerEntry, Limits, ReadXdr, TransactionEnvelope, TransactionMeta, 
+    DiagnosticEvent, LedgerEntry, Limits, ReadXdr, TransactionEnvelope, TransactionMeta, 
     WriteXdr, TransactionResult,
 };
 
@@ -112,6 +112,25 @@ impl XdrCodec for LedgerEntry {
     }
 }
 
+impl XdrCodec for DiagnosticEvent {
+    const TYPE_NAME: &'static str = "DiagnosticEvent";
+
+    fn from_xdr_bytes(bytes: &[u8]) -> PrismResult<Self> {
+        DiagnosticEvent::from_xdr(bytes, Limits::none()).map_err(|e| {
+            PrismError::XdrDecodingFailed {
+                type_name: Self::TYPE_NAME,
+                reason: e.to_string(),
+            }
+        })
+    }
+
+    fn to_xdr_bytes(&self) -> PrismResult<Vec<u8>> {
+        self.to_xdr(Limits::none()).map_err(|e| {
+            PrismError::XdrError(format!("Failed to encode {}: {}", Self::TYPE_NAME, e))
+        })
+    }
+}
+
 // ── Low-level helpers ───────────────────────────────────────────────────────
 
 /// Decode a base64-encoded XDR string to raw bytes.
@@ -171,8 +190,8 @@ mod tests {
     #[test]
     fn test_xdr_codec_round_trip() {
         let envelope = make_test_envelope();
-        let b64 = XdrCodec::to_xdr_base64(&envelope).expect("encode");
-        let decoded = <TransactionEnvelope as XdrCodec>::from_xdr_base64(&b64).expect("decode");
+        let b64 = crate::xdr::codec::XdrCodec::to_xdr_base64(&envelope).expect("encode");
+        let decoded = <TransactionEnvelope as crate::xdr::codec::XdrCodec>::from_xdr_base64(&b64).expect("decode");
         assert_eq!(envelope, decoded);
     }
 
@@ -200,7 +219,7 @@ mod tests {
         ];
         
         let b64 = encode_xdr_base64(&xdr_bytes);
-        let meta = <TransactionMeta as XdrCodec>::from_xdr_base64(&b64).expect("decode V3");
+        let meta = <TransactionMeta as crate::xdr::codec::XdrCodec>::from_xdr_base64(&b64).expect("decode V3");
 
         if let TransactionMeta::V3(v3) = meta {
             assert_eq!(v3.operations.len(), 1);
@@ -224,8 +243,8 @@ mod tests {
         let xdr_bytes = vec![0u8; 20];
         let bytes = encode_xdr_base64(&xdr_bytes);
         
-        let decoded = <TransactionResult as XdrCodec>::from_xdr_base64(&bytes).expect("decode");
-        let encoded = XdrCodec::to_xdr_base64(&decoded).expect("encode");
+        let decoded = <TransactionResult as crate::xdr::codec::XdrCodec>::from_xdr_base64(&bytes).expect("decode");
+        let encoded = crate::xdr::codec::XdrCodec::to_xdr_base64(&decoded).expect("encode");
         
         assert_eq!(bytes, encoded);
     }
