@@ -3,7 +3,7 @@
 //! Provides strongly-typed request/response envelopes and a reusable HTTP
 //! transport so every RPC call is validated at compile time via Serde.
 
-use crate::error::{PrismError, PrismResult};
+use crate::error::{PrismError, PrismResult, JsonRpcError};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -38,13 +38,6 @@ pub struct JsonRpcResponse<T> {
     pub id: u64,
     pub result: Option<T>,
     pub error: Option<JsonRpcError>,
-}
-
-/// JSON-RPC error object returned inside a response.
-#[derive(Debug, Deserialize)]
-pub struct JsonRpcError {
-    pub code: i64,
-    pub message: String,
 }
 
 // ── Soroban RPC param/result types ───────────────────────────────────────────
@@ -162,9 +155,10 @@ impl JsonRpcTransport {
                             method,
                             endpoint = %self.endpoint,
                             error = %err.message,
+                            code = err.code,
                             "RPC returned error response"
                         );
-                        return Err(PrismError::RpcError(err.message));
+                        return Err(PrismError::JsonRpc(err));
                     }
 
                     return envelope
