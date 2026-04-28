@@ -132,7 +132,7 @@ impl SorobanRpcClient {
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(config.request_timeout_secs))
             .default_headers(headers)
             .build()
             .expect("Failed to build reqwest client");
@@ -437,5 +437,43 @@ mod tests {
         let result = client.get_ledger_entries(&["key1".to_string()]).await.unwrap();
         assert_eq!(result["entries"].as_array().unwrap().len(), 0);
         assert_eq!(result["latestLedger"], 123);
+    }
+
+    #[tokio::test]
+    async fn test_client_respects_timeout() {
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let rpc_url = format!("http://{}", addr);
+
+        // Set a 1s timeout in config
+        let config = NetworkConfig {
+            network: crate::network::Network::Testnet,
+            rpc_url,
+            network_passphrase: "test".to_string(),
+            archive_urls: vec![],
+            api_key: None,
+            request_timeout_secs: 1,
+        };
+        let client = SorobanRpcClient::new(&config);
+
+        tokio::spawn(async move {
+            while let Ok((_socket, _)) = listener.accept().await {
+                // Sleep for 2s to trigger timeout
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        });
+
+        let result = client.get_latest_ledger().await;
+        
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        println!("Error message: {}", err_msg);
+        // reqwest timeout error message usually contains "timeout"
+        assert!(
+            err_msg.to_lowercase().contains("timeout") || err_msg.to_lowercase().contains("error sending request"),
+            "Actual error: {}", err_msg
+        );
     }
 }
