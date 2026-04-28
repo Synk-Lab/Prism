@@ -22,13 +22,13 @@ pub trait XdrCodec: Sized {
     fn to_xdr_bytes(&self) -> PrismResult<Vec<u8>>;
 
     /// Decode from a base64-encoded XDR string.
-    fn from_xdr_base64(b64: &str) -> PrismResult<Self> {
+    fn from_base64(b64: &str) -> PrismResult<Self> {
         let bytes = decode_xdr_base64(b64)?;
         Self::from_xdr_bytes(&bytes)
     }
 
     /// Encode to a base64-encoded XDR string.
-    fn to_xdr_base64(&self) -> PrismResult<String> {
+    fn to_base64(&self) -> PrismResult<String> {
         let bytes = self.to_xdr_bytes()?;
         Ok(encode_xdr_base64(&bytes))
     }
@@ -228,8 +228,8 @@ mod tests {
     #[test]
     fn test_xdr_codec_round_trip() {
         let envelope = make_test_envelope();
-        let b64 = envelope.to_xdr_base64().expect("encode");
-        let decoded = TransactionEnvelope::from_xdr_base64(&b64).expect("decode");
+        let b64 = envelope.to_base64().expect("encode");
+        let decoded = TransactionEnvelope::from_base64(&b64).expect("decode");
         assert_eq!(envelope, decoded);
     }
 
@@ -251,13 +251,13 @@ mod tests {
             0, 0, 0, 1, // type = CONTRACT
             0, 0, 0, 0, // body discriminant V0
             0, 0, 0, 0, // topics = []
-            0, 0, 0, 0, // data = ScVal::Void
-            0, 0, 0, 0, // returnValue = ScVal::Void
+            0, 0, 0, 1, // data = ScVal::Void
+            0, 0, 0, 1, // returnValue = ScVal::Void
             0, 0, 0, 0, // diagnosticEvents = []
         ];
         
         let b64 = encode_xdr_base64(&xdr_bytes);
-        let meta = TransactionMeta::from_xdr_base64(&b64).expect("decode V3");
+        let meta = TransactionMeta::from_base64(&b64).expect("decode V3");
 
         if let TransactionMeta::V3(v3) = meta {
             assert_eq!(v3.operations.len(), 1);
@@ -281,8 +281,8 @@ mod tests {
         let xdr_bytes = vec![0u8; 20];
         let bytes = encode_xdr_base64(&xdr_bytes);
         
-        let decoded = TransactionResult::from_xdr_base64(&bytes).expect("decode");
-        let encoded = decoded.to_xdr_base64().expect("encode");
+        let decoded = TransactionResult::from_base64(&bytes).expect("decode");
+        let encoded = decoded.to_base64().expect("encode");
         
         assert_eq!(bytes, encoded);
     }
@@ -290,16 +290,16 @@ mod tests {
     #[test]
     fn test_scmap_round_trip() {
         let scmap = ScMap(vec![].try_into().unwrap());
-        let b64 = scmap.to_xdr_base64().expect("encode");
-        let decoded = ScMap::from_xdr_base64(&b64).expect("decode");
+        let b64 = scmap.to_base64().expect("encode");
+        let decoded = ScMap::from_base64(&b64).expect("decode");
         assert_eq!(scmap, decoded);
     }
 
     #[test]
     fn test_scval_round_trip() {
         let scval = ScVal::Void;
-        let b64 = scval.to_xdr_base64().expect("encode");
-        let decoded = ScVal::from_xdr_base64(&b64).expect("decode");
+        let b64 = scval.to_base64().expect("encode");
+        let decoded = ScVal::from_base64(&b64).expect("decode");
         assert_eq!(scval, decoded);
     }
 
@@ -312,8 +312,8 @@ mod tests {
             inputs: vec![].try_into().unwrap(),
             outputs: vec![].try_into().unwrap(),
         });
-        let b64 = entry.to_xdr_base64().expect("encode");
-        let decoded = ScSpecEntry::from_xdr_base64(&b64).expect("decode");
+        let b64 = entry.to_base64().expect("encode");
+        let decoded = ScSpecEntry::from_base64(&b64).expect("decode");
         assert_eq!(entry, decoded);
     }
 }
