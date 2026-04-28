@@ -101,7 +101,7 @@ impl std::fmt::Display for ErrorCategory {
 
 /// A parsed TOML taxonomy file containing entries for a single category.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaxonomyFile {
+pub struct TaxonomySchema {
     /// Category metadata.
     pub category: CategoryMeta,
     /// Error entries.

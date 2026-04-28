@@ -171,8 +171,8 @@ mod tests {
     #[test]
     fn test_xdr_codec_round_trip() {
         let envelope = make_test_envelope();
-        let b64 = envelope.to_xdr_base64().expect("encode");
-        let decoded = TransactionEnvelope::from_xdr_base64(&b64).expect("decode");
+        let b64 = XdrCodec::to_xdr_base64(&envelope).expect("encode");
+        let decoded = <TransactionEnvelope as XdrCodec>::from_xdr_base64(&b64).expect("decode");
         assert_eq!(envelope, decoded);
     }
 
@@ -200,7 +200,7 @@ mod tests {
         ];
         
         let b64 = encode_xdr_base64(&xdr_bytes);
-        let meta = TransactionMeta::from_xdr_base64(&b64).expect("decode V3");
+        let meta = <TransactionMeta as XdrCodec>::from_xdr_base64(&b64).expect("decode V3");
 
         if let TransactionMeta::V3(v3) = meta {
             assert_eq!(v3.operations.len(), 1);
@@ -224,8 +224,8 @@ mod tests {
         let xdr_bytes = vec![0u8; 20];
         let bytes = encode_xdr_base64(&xdr_bytes);
         
-        let decoded = TransactionResult::from_xdr_base64(&bytes).expect("decode");
-        let encoded = decoded.to_xdr_base64().expect("encode");
+        let decoded = <TransactionResult as XdrCodec>::from_xdr_base64(&bytes).expect("decode");
+        let encoded = XdrCodec::to_xdr_base64(&decoded).expect("encode");
         
         assert_eq!(bytes, encoded);
     }
