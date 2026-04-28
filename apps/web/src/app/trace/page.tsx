@@ -5,7 +5,7 @@ import { useTrace } from "@/hooks/useTrace";
 import { ExecutionTimeline } from "@/components/trace/ExecutionTimeline";
 import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
 import { ResourceProfile } from "@/components/trace/ResourceProfile";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import LoadingSpinner from "@/components/shared/LoadingSpinner";
 
 export default function TracePage() {
   const [txHash, setTxHash] = useState("");
