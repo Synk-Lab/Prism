@@ -1,13 +1,13 @@
 //! XDR codec - thin wrapper over `stellar-xdr` with convenience methods.
 //!
 //! Handles serialization/deserialization of transaction envelopes, results,
-//! ledger entries, SCVal, and SCSpecEntry types.
+//! ledger entries, ScVal, and ScSpecEntry types.
 
 use crate::error::{PrismError, PrismResult};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use stellar_xdr::curr::{
     LedgerEntry, Limits, ReadXdr, TransactionEnvelope, TransactionMeta, 
-    WriteXdr, TransactionResult,
+    WriteXdr, TransactionResult, ScMap, ScVal, ScSpecEntry,
 };
 
 /// Uniform base64-XDR encode/decode interface for Stellar XDR types.
@@ -98,6 +98,63 @@ impl XdrCodec for LedgerEntry {
 
     fn from_xdr_bytes(bytes: &[u8]) -> PrismResult<Self> {
         LedgerEntry::from_xdr(bytes, Limits::none()).map_err(|e| {
+            PrismError::XdrDecodingFailed {
+                type_name: Self::TYPE_NAME,
+                reason: e.to_string(),
+            }
+        })
+    }
+
+    fn to_xdr_bytes(&self) -> PrismResult<Vec<u8>> {
+        self.to_xdr(Limits::none()).map_err(|e| {
+            PrismError::XdrError(format!("Failed to encode {}: {}", Self::TYPE_NAME, e))
+        })
+    }
+}
+
+impl XdrCodec for ScMap {
+    const TYPE_NAME: &'static str = "ScMap";
+
+    fn from_xdr_bytes(bytes: &[u8]) -> PrismResult<Self> {
+        ScMap::from_xdr(bytes, Limits::none()).map_err(|e| {
+            PrismError::XdrDecodingFailed {
+                type_name: Self::TYPE_NAME,
+                reason: e.to_string(),
+            }
+        })
+    }
+
+    fn to_xdr_bytes(&self) -> PrismResult<Vec<u8>> {
+        self.to_xdr(Limits::none()).map_err(|e| {
+            PrismError::XdrError(format!("Failed to encode {}: {}", Self::TYPE_NAME, e))
+        })
+    }
+}
+
+impl XdrCodec for ScVal {
+    const TYPE_NAME: &'static str = "ScVal";
+
+    fn from_xdr_bytes(bytes: &[u8]) -> PrismResult<Self> {
+        ScVal::from_xdr(bytes, Limits::none()).map_err(|e| {
+            PrismError::XdrDecodingFailed {
+                type_name: Self::TYPE_NAME,
+                reason: e.to_string(),
+            }
+        })
+    }
+
+    fn to_xdr_bytes(&self) -> PrismResult<Vec<u8>> {
+        self.to_xdr(Limits::none()).map_err(|e| {
+            PrismError::XdrError(format!("Failed to encode {}: {}", Self::TYPE_NAME, e))
+        })
+    }
+}
+
+impl XdrCodec for ScSpecEntry {
+    const TYPE_NAME: &'static str = "ScSpecEntry";
+
+    fn from_xdr_bytes(bytes: &[u8]) -> PrismResult<Self> {
+        ScSpecEntry::from_xdr(bytes, Limits::none()).map_err(|e| {
             PrismError::XdrDecodingFailed {
                 type_name: Self::TYPE_NAME,
                 reason: e.to_string(),
@@ -228,6 +285,36 @@ mod tests {
         let encoded = decoded.to_xdr_base64().expect("encode");
         
         assert_eq!(bytes, encoded);
+    }
+
+    #[test]
+    fn test_scmap_round_trip() {
+        let scmap = ScMap(vec![].try_into().unwrap());
+        let b64 = scmap.to_xdr_base64().expect("encode");
+        let decoded = ScMap::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(scmap, decoded);
+    }
+
+    #[test]
+    fn test_scval_round_trip() {
+        let scval = ScVal::Void;
+        let b64 = scval.to_xdr_base64().expect("encode");
+        let decoded = ScVal::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(scval, decoded);
+    }
+
+    #[test]
+    fn test_scspecentry_round_trip() {
+        use stellar_xdr::curr::ScSpecFunctionV0;
+        let entry = ScSpecEntry::FunctionV0(ScSpecFunctionV0 {
+            doc: "".try_into().unwrap(),
+            name: "test".try_into().unwrap(),
+            inputs: vec![].try_into().unwrap(),
+            outputs: vec![].try_into().unwrap(),
+        });
+        let b64 = entry.to_xdr_base64().expect("encode");
+        let decoded = ScSpecEntry::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(entry, decoded);
     }
 }
 
