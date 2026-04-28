@@ -4,12 +4,21 @@
 //! `getLedgerEntries`, `getEvents`, `getLatestLedger`. Handles retries and
 //! basic rate-limit backoff.
 
-use crate::rpc::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
-use crate::network::NetworkConfig;
 use crate::error::{PrismError, PrismResult};
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+use crate::network::NetworkConfig;
+use crate::rpc::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
+
+const USER_AGENT_VALUE: &str = concat!("prism-sdk-rust/", env!("CARGO_PKG_VERSION"));
+
+fn default_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_VALUE));
+    headers
+}
 
 // ── simulateTransaction response types ──────────────────────────────────────
 
@@ -94,8 +103,6 @@ pub struct SorobanRpcClient {
     rpc_url: String,
 }
 
-
-
 /// Transaction status in Soroban.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -128,12 +135,9 @@ impl SorobanRpcClient {
     ///
     /// Initialises a [`reqwest::Client`] matching the config's timeout or defaults to 30s.
     pub fn new(config: &NetworkConfig) -> Self {
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
-            .default_headers(headers)
+            .default_headers(default_headers())
             .build()
             .expect("Failed to build reqwest client");
 
@@ -145,11 +149,9 @@ impl SorobanRpcClient {
 
     /// Update the timeout for the client in seconds.
     pub fn with_timeout(mut self, timeout_secs: u64) -> Self {
-        let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         self.client = reqwest::Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
-            .default_headers(headers)
+            .default_headers(default_headers())
             .build()
             .expect("Failed to build reqwest client");
         self
@@ -183,12 +185,13 @@ impl SorobanRpcClient {
         tx_xdr: &str,
     ) -> PrismResult<SimulateTransactionResponse> {
         let params = serde_json::json!({ "transaction": tx_xdr });
-        let raw = self.call::<serde_json::Value>("simulateTransaction", params).await?;
+        let raw = self
+            .call::<serde_json::Value>("simulateTransaction", params)
+            .await?;
 
-        let response: SimulateTransactionResponse =
-            serde_json::from_value(raw).map_err(|e| {
-                PrismError::RpcError(format!("Failed to parse simulateTransaction response: {e}"))
-            })?;
+        let response: SimulateTransactionResponse = serde_json::from_value(raw).map_err(|e| {
+            PrismError::RpcError(format!("Failed to parse simulateTransaction response: {e}"))
+        })?;
 
         // Surface simulation-level errors as a proper Rust error so callers
         // don't need to inspect the struct themselves.
@@ -204,7 +207,8 @@ impl SorobanRpcClient {
     /// Fetch ledger entries by their XDR keys.
     pub async fn get_ledger_entries(&self, keys: &[String]) -> PrismResult<serde_json::Value> {
         let params = serde_json::json!({ "keys": keys });
-        self.call::<serde_json::Value>("getLedgerEntries", params).await
+        self.call::<serde_json::Value>("getLedgerEntries", params)
+            .await
     }
 
     /// Query events starting from `start_ledger` with the given filters.
@@ -250,6 +254,15 @@ impl SorobanRpcClient {
                 Ok(response) => {
                     let status = response.status();
                     let elapsed_ms = started.elapsed().as_millis();
+                    tracing::info!(
+                        method,
+                        endpoint = %self.rpc_url,
+                        attempt,
+                        %status,
+                        elapsed_ms,
+                        "RPC request latency"
+                    );
+
                     let body = response.text().await.map_err(|e| {
                         PrismError::RpcError(format!("Failed to read response body: {e}"))
                     })?;
@@ -295,11 +308,21 @@ impl SorobanRpcClient {
                     });
                 }
                 Err(e) => {
+                    let elapsed_ms = started.elapsed().as_millis();
+                    tracing::info!(
+                        method,
+                        endpoint = %self.rpc_url,
+                        attempt,
+                        elapsed_ms,
+                        error = %e,
+                        "RPC request latency"
+                    );
+
                     tracing::debug!(
                         method,
                         endpoint = %self.rpc_url,
                         attempt,
-                        elapsed_ms = started.elapsed().as_millis(),
+                        elapsed_ms,
                         error = %e,
                         "RPC request failed"
                     );
@@ -354,6 +377,18 @@ mod tests {
             let got: TransactionStatus = serde_json::from_str(raw).unwrap();
             assert_eq!(got, expected);
         }
+    }
+
+    #[test]
+    fn default_headers_include_user_agent() {
+        let headers = default_headers();
+
+        assert_eq!(
+            headers
+                .get(USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some(USER_AGENT_VALUE)
+        );
     }
 
     #[test]
