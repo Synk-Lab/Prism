@@ -285,9 +285,10 @@ impl SorobanRpcClient {
                             endpoint = %self.rpc_url,
                             attempt,
                             error = %err.message,
+                            code = err.code,
                             "RPC returned an error response"
                         );
-                        return Err(PrismError::RpcError(err.message));
+                        return Err(PrismError::JsonRpc(err));
                     }
 
                     return rpc_response.result.ok_or_else(|| {
