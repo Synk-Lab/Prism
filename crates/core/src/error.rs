@@ -1,6 +1,16 @@
 //! Error types for the Prism crate.
 
 use thiserror::Error;
+use serde::{Deserialize, Serialize};
+
+/// Standard JSON-RPC 2.0 error object.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct JsonRpcError {
+    /// Standard JSON-RPC error code.
+    pub code: i64,
+    /// Human-readable error message.
+    pub message: String,
+}
 
 /// Specific failure kinds for history archive operations.
 #[derive(Debug, Error)]
@@ -37,6 +47,10 @@ pub enum PrismError {
     #[error("RPC error: {0}")]
     RpcError(String),
 
+    /// Standard JSON-RPC 2.0 error (e.g. Parse error, Invalid request).
+    #[error("JSON-RPC error (code: {0.code}): {0.message}")]
+    JsonRpc(JsonRpcError),
+    
     /// Error fetching or parsing history archive data.
     #[error("Archive error: {0}")]
     ArchiveError(#[from] ArchiveErrorKind),
