@@ -6,7 +6,7 @@
 use crate::error::{PrismError, PrismResult};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use stellar_xdr::curr::{
-    LedgerEntry, Limits, ReadXdr, TransactionEnvelope, TransactionMeta, 
+    DiagnosticEvent, LedgerEntry, Limits, ReadXdr, TransactionEnvelope, TransactionMeta, 
     WriteXdr, TransactionResult,
 };
 
@@ -112,6 +112,25 @@ impl XdrCodec for LedgerEntry {
     }
 }
 
+impl XdrCodec for DiagnosticEvent {
+    const TYPE_NAME: &'static str = "DiagnosticEvent";
+
+    fn from_xdr_bytes(bytes: &[u8]) -> PrismResult<Self> {
+        DiagnosticEvent::from_xdr(bytes, Limits::none()).map_err(|e| {
+            PrismError::XdrDecodingFailed {
+                type_name: Self::TYPE_NAME,
+                reason: e.to_string(),
+            }
+        })
+    }
+
+    fn to_xdr_bytes(&self) -> PrismResult<Vec<u8>> {
+        self.to_xdr(Limits::none()).map_err(|e| {
+            PrismError::XdrError(format!("Failed to encode {}: {}", Self::TYPE_NAME, e))
+        })
+    }
+}
+
 // ── Low-level helpers ───────────────────────────────────────────────────────
 
 /// Decode a base64-encoded XDR string to raw bytes.
@@ -171,8 +190,8 @@ mod tests {
     #[test]
     fn test_xdr_codec_round_trip() {
         let envelope = make_test_envelope();
-        let b64 = XdrCodec::to_xdr_base64(&envelope).expect("encode");
-        let decoded = <TransactionEnvelope as XdrCodec>::from_xdr_base64(&b64).expect("decode");
+        let b64 = crate::xdr::codec::XdrCodec::to_xdr_base64(&envelope).expect("encode");
+        let decoded = <TransactionEnvelope as crate::xdr::codec::XdrCodec>::from_xdr_base64(&b64).expect("decode");
         assert_eq!(envelope, decoded);
     }
 
@@ -187,15 +206,29 @@ mod tests {
             .try_into()
             .expect("one operation"),
             tx_changes_after: vec![].try_into().expect("empty changes"),
-            soroban_meta: None,
+            soroban_meta: Some(stellar_xdr::curr::SorobanTransactionMeta {
+                ext: stellar_xdr::curr::SorobanTransactionMetaExt::V0,
+                events: vec![stellar_xdr::curr::ContractEvent {
+                    ext: ExtensionPoint::V0,
+                    contract_id: None,
+                    type_: stellar_xdr::curr::ContractEventType::Contract,
+                    body: stellar_xdr::curr::ContractEventBody::V0(stellar_xdr::curr::ContractEventV0 {
+                        topics: vec![].try_into().unwrap(),
+                        data: stellar_xdr::curr::ScVal::Void,
+                    }),
+                }].try_into().unwrap(),
+                return_value: stellar_xdr::curr::ScVal::Void,
+                diagnostic_events: vec![].try_into().unwrap(),
+            }),
         });
 
-        let b64 = XdrCodec::to_xdr_base64(&meta).expect("encode V3");
-        let meta = <TransactionMeta as XdrCodec>::from_xdr_base64(&b64).expect("decode V3");
+        let b64 = crate::xdr::codec::XdrCodec::to_xdr_base64(&meta).expect("encode V3");
+        let decoded = <TransactionMeta as crate::xdr::codec::XdrCodec>::from_xdr_base64(&b64).expect("decode V3");
 
-        if let TransactionMeta::V3(v3) = meta {
+        if let TransactionMeta::V3(v3) = decoded {
             assert_eq!(v3.operations.len(), 1);
-            assert!(v3.soroban_meta.is_none());
+            let soroban = v3.soroban_meta.expect("soroban_meta");
+            assert_eq!(soroban.events.len(), 1);
         } else {
             panic!("expected V3");
         }
@@ -214,10 +247,30 @@ mod tests {
         let xdr_bytes = vec![0u8; 20];
         let bytes = encode_xdr_base64(&xdr_bytes);
         
-        let decoded = <TransactionResult as XdrCodec>::from_xdr_base64(&bytes).expect("decode");
-        let encoded = XdrCodec::to_xdr_base64(&decoded).expect("encode");
+        let decoded = <TransactionResult as crate::xdr::codec::XdrCodec>::from_xdr_base64(&bytes).expect("decode");
+        let encoded = crate::xdr::codec::XdrCodec::to_xdr_base64(&decoded).expect("encode");
         
         assert_eq!(bytes, encoded);
+    }
+
+    #[test]
+    fn test_diagnostic_event_round_trip() {
+        let event = DiagnosticEvent {
+            in_successful_contract_call: true,
+            event: stellar_xdr::curr::ContractEvent {
+                ext: ExtensionPoint::V0,
+                contract_id: None,
+                type_: stellar_xdr::curr::ContractEventType::Contract,
+                body: stellar_xdr::curr::ContractEventBody::V0(stellar_xdr::curr::ContractEventV0 {
+                    topics: vec![].try_into().unwrap(),
+                    data: stellar_xdr::curr::ScVal::Void,
+                }),
+            },
+        };
+
+        let b64 = crate::xdr::codec::XdrCodec::to_xdr_base64(&event).expect("encode");
+        let decoded = <DiagnosticEvent as crate::xdr::codec::XdrCodec>::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(event, decoded);
     }
 }
 
