@@ -12,13 +12,37 @@ pub struct JsonRpcError {
     pub message: String,
 }
 
+/// Specific failure kinds for history archive operations.
+#[derive(Debug, Error)]
+pub enum ArchiveErrorKind {
+    /// A fetched archive file did not match its expected checksum.
+    #[error("checksum mismatch for '{file}': expected {expected}, got {actual}")]
+    ChecksumMismatch {
+        file: String,
+        expected: String,
+        actual: String,
+    },
+
+    /// An archive file contained XDR that could not be decoded.
+    #[error("malformed XDR in '{file}': {reason}")]
+    MalformedXdr { file: String, reason: String },
+
+    /// An archive file could not be fetched from any configured backend.
+    #[error("failed to fetch '{file}' from all archive backends: {reason}")]
+    FetchFailed { file: String, reason: String },
+
+    /// An archive file could not be decompressed.
+    #[error("decompression failed for '{file}': {reason}")]
+    DecompressionFailed { file: String, reason: String },
+}
+
 /// Top-level error type for all Prism operations.
 #[derive(Debug, Error)]
 pub enum PrismError {
     /// A network request exceeded the configured timeout duration.
     #[error("RPC request timed out after {timeout_secs}s (method: {method})")]
     NetworkTimeout { method: String, timeout_secs: u64 },
-    
+
     /// Error communicating with the Soroban RPC endpoint.
     #[error("RPC error: {0}")]
     RpcError(String),
@@ -29,7 +53,7 @@ pub enum PrismError {
     
     /// Error fetching or parsing history archive data.
     #[error("Archive error: {0}")]
-    ArchiveError(String),
+    ArchiveError(#[from] ArchiveErrorKind),
     
     /// Error decoding XDR data.
     #[error("XDR error: {0}")]
