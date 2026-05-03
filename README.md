@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/Rust-1.77+-orange?style=for-the-badge&logo=rust" alt="Rust 1.77" />
   <img src="https://img.shields.io/badge/Next.js-16.x-black?style=for-the-badge&logo=next.js" alt="Next.js 16" />
   <img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=for-the-badge&logo=typescript" alt="TS 5" />
-  <img src="https://img.shields.io/badge/Stellar-Soroban-black?style=for-the-badge&logo=stellar" alt="Stellar" />
+  <img src="https://img.shields.io/badge/Documentation-Live-blue?style=for-the-badge&logo=gitbook&logoColor=white" alt="Docs" />
 </p>
 
 **Prism** is a diagnostic tool for Soroban that translates complex blockchain errors into clear, actionable insights. By resolving custom contract errors and providing interactive time-travel replays of historical transactions, Prism helps developers identify and fix root causes in seconds.
@@ -64,11 +64,22 @@ Prism is organized as a modular monorepo:
 
 ## Documentation
 
-Comprehensive documentation for Prism:
+For full technical specifications, architecture deep-dives, and API references, visit our [Live Documentation](https://prism-ddf93e61.mintlify.app/docs/introduction).
 
-- [Documentation Index](./docs/README.md)
-- [Architecture Overview](./docs/architecture/overview.md)
-- [Error Taxonomy Guide](./docs/error-taxonomy-guide.md)
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="https://prism-ddf93e61.mintlify.app/docs/quickstart">
+    Get up and running in under 60 seconds.
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="https://prism-ddf93e61.mintlify.app/docs/cli/decode">
+    Complete guide to all Prism commands.
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="https://prism-ddf93e61.mintlify.app/docs/architecture/overview">
+    Deep dive into the 3-tier diagnostic engine.
+  </Card>
+  <Card title="Guides" icon="book" href="https://prism-ddf93e61.mintlify.app/docs/guides/debugging-transactions">
+    Real-world walkthroughs and optimization tips.
+  </Card>
+</CardGroup>
 
 ## Use Cases
 
