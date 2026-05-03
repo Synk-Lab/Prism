@@ -1,0 +1,19 @@
+---
+title: "prism diff"
+sidebarTitle: "diff"
+description: "View ledger state changes before and after transaction execution."
+icon: "square-plus"
+---
+
+The `diff` command shows you exactly what changed in the ledger as a result of the transaction.
+
+## Usage
+
+```bash
+prism diff <TX_HASH> [FLAGS]
+```
+
+## Features
+- **Side-by-Side Comparison**: Human-readable view of state changes.
+- **Decoded Values**: Ledger entry values are decoded into field names based on the contract metadata.
+- **XDR View**: Toggle to see the raw XDR diff for low-level verification.

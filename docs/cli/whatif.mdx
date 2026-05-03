@@ -1,0 +1,20 @@
+---
+title: "prism whatif"
+sidebarTitle: "whatif"
+description: "Re-simulate with modified inputs and compare outcomes."
+icon: "question"
+---
+
+The `whatif` command allows for non-destructive experimentation with failed transactions.
+
+## Usage
+
+```bash
+prism whatif <TX_HASH> --modify <PATCH_FILE>
+```
+
+## Patch Examples
+You can modify:
+- **Arguments**: Change the values passed to the contract.
+- **Ledger Entries**: Simulate a different starting state.
+- **Resource Limits**: See if a higher budget would have fixed the failure.

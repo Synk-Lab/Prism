@@ -1,0 +1,26 @@
+---
+title: "Core Library"
+sidebarTitle: "Core Library"
+description: "Embed Prism diagnostics into your own tools."
+icon: "cube"
+---
+
+The Prism core engine is published as a Rust crate and a WASM package.
+
+## Rust Usage
+Add `prism-core` to your `Cargo.toml`:
+```toml
+[dependencies]
+prism-core = "0.1.0"
+```
+
+## WASM Usage
+Embed Prism into your JavaScript/TypeScript applications:
+```bash
+npm install @prism-soroban/wasm
+```
+
+## Public API Highlights
+- `decode_error`: Returns a structured diagnostic report.
+- `resolve_contract_error`: Decodes custom error codes via WASM.
+- `replay_transaction`: Runs a full Tier 2/3 simulation.
