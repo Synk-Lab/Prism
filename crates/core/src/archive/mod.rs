@@ -4,7 +4,7 @@
 //! Supports S3/GCS/HTTP backends. Used only for older transactions outside the RPC hot path.
 
 use crate::network::NetworkConfig;
-use crate::error::{PrismError, PrismResult};
+use crate::error::{ArchiveErrorKind, PrismResult};
 
 /// Client for accessing Stellar History Archives.
 pub struct ArchiveClient {
@@ -56,9 +56,11 @@ impl ArchiveClient {
             "Fetching archive checkpoint for ledger {checkpoint_seq}"
         );
 
-        Err(PrismError::ArchiveError(
-            "Archive fetch not yet implemented".to_string(),
-        ))
+        Err(ArchiveErrorKind::FetchFailed {
+            file: format!("checkpoint-{checkpoint_seq}"),
+            reason: "Archive fetch not yet implemented".to_string(),
+        }
+        .into())
     }
 
     /// Fetch a specific ledger entry from the history archives.
@@ -67,9 +69,11 @@ impl ArchiveClient {
         _ledger_sequence: u32,
         _key: &str,
     ) -> PrismResult<Vec<u8>> {
-        Err(PrismError::ArchiveError(
-            "Ledger entry fetch not yet implemented".to_string(),
-        ))
+        Err(ArchiveErrorKind::FetchFailed {
+            file: format!("ledger-entry-{_ledger_sequence}-{_key}"),
+            reason: "Ledger entry fetch not yet implemented".to_string(),
+        }
+        .into())
     }
 }
 

@@ -51,8 +51,9 @@ pub struct ContractSpec {
 /// # Returns
 /// A `ContractSpec` with all decoded metadata.
 pub fn decode_contract_spec(wasm_bytes: &[u8]) -> PrismResult<ContractSpec> {
+    let _raw_spec = SpecParser::extract_spec(wasm_bytes)?;
+
     // Parse WASM to find custom sections named "contractspecv0" and "contractmetav0"
-    let parser = wasmparser::Parser::new(0);
     let spec = ContractSpec {
         errors: Vec::new(),
         functions: Vec::new(),
@@ -60,33 +61,40 @@ pub fn decode_contract_spec(wasm_bytes: &[u8]) -> PrismResult<ContractSpec> {
         version: None,
     };
 
-    for payload in parser.parse_all(wasm_bytes) {
-        let payload =
-            payload.map_err(|e| PrismError::SpecError(format!("WASM parse error: {e}")))?;
+    // TODO: Actually decode the raw_spec into ContractSpec
+    // This will be implemented in a future PR.
+    
+    Ok(spec)
+}
 
-        if let wasmparser::Payload::CustomSection(section) = payload {
-            match section.name() {
-                "contractspecv0" => {
-                    // TODO: Parse SCSpecEntry items from section data
-                    // Each entry can be a function, error enum, struct, or union definition
-                    tracing::debug!(
-                        "Found contractspecv0 section ({} bytes)",
-                        section.data().len()
-                    );
+/// A parser for extracting custom sections from WASM binaries.
+pub struct SpecParser;
+
+impl SpecParser {
+    /// Extracts the raw data from the `contractspecv0` custom section.
+    ///
+    /// # Arguments
+    /// * `wasm_bytes` - Raw WASM binary data.
+    ///
+    /// # Returns
+    /// The raw bytes of the `contractspecv0` section if found.
+    pub fn extract_spec(wasm_bytes: &[u8]) -> PrismResult<Vec<u8>> {
+        let parser = wasmparser::Parser::new(0);
+        for payload in parser.parse_all(wasm_bytes) {
+            let payload =
+                payload.map_err(|e| PrismError::SpecError(format!("WASM parse error: {e}")))?;
+
+            if let wasmparser::Payload::CustomSection(section) = payload {
+                if section.name() == "contractspecv0" {
+                    return Ok(section.data().to_vec());
                 }
-                "contractmetav0" => {
-                    // TODO: Parse SCMetaEntry items from section data
-                    tracing::debug!(
-                        "Found contractmetav0 section ({} bytes)",
-                        section.data().len()
-                    );
-                }
-                _ => {}
             }
         }
-    }
 
-    Ok(spec)
+        Err(PrismError::SpecError(
+            "contractspecv0 custom section not found".into(),
+        ))
+    }
 }
 
 /// Resolve a numeric error code to its named variant using a contract spec.
@@ -119,5 +127,40 @@ mod tests {
         };
         assert!(resolve_error_code(&spec, 99).is_none());
         assert!(resolve_error_code(&spec, 1).is_some());
+    }
+
+    #[test]
+    fn test_extract_spec_success() {
+        // Minimal WASM with contractspecv0 custom section
+        // Header: \0asm\1\0\0\0
+        // Custom section: id=0, payload_len=..., name_len=14, name="contractspecv0", data=[1, 2, 3]
+        let mut wasm = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
+        let section_name = "contractspecv0";
+        let section_data = vec![1, 2, 3, 4];
+        
+        let mut custom_payload = Vec::new();
+        // Name length as leb128 (14 is 0x0E)
+        custom_payload.push(section_name.len() as u8);
+        custom_payload.extend_from_slice(section_name.as_bytes());
+        custom_payload.extend_from_slice(&section_data);
+        
+        wasm.push(0); // Custom section ID
+        // Section length as leb128
+        wasm.push(custom_payload.len() as u8);
+        wasm.extend(custom_payload);
+
+        let result = SpecParser::extract_spec(&wasm).expect("Should find section");
+        assert_eq!(result, section_data);
+    }
+
+    #[test]
+    fn test_extract_spec_not_found() {
+        let wasm = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
+        let result = SpecParser::extract_spec(&wasm);
+        assert!(result.is_err());
+        match result {
+            Err(PrismError::SpecError(msg)) => assert!(msg.contains("not found")),
+            _ => panic!("Expected SpecError"),
+        }
     }
 }

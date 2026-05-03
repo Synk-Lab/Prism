@@ -74,6 +74,38 @@ impl Address {
         }
     }
 
+    /// Validate that a string is a Soroban contract ID.
+    ///
+    /// A valid contract ID must:
+    /// - Start with an uppercase `C` prefix
+    /// - Be a valid Stellar contract strkey payload and checksum
+    pub fn validate_contract_id(contract_id: &str) -> PrismResult<()> {
+        if !contract_id.starts_with('C') {
+            return Err(PrismError::InvalidAddress(
+                "Contract ID must start with 'C'".to_string(),
+            ));
+        }
+
+        Contract::from_string(contract_id).map_err(|e| {
+            PrismError::InvalidAddress(format!("Invalid contract ID '{contract_id}': {e}"))
+        })?;
+
+        Ok(())
+    }
+
+    /// Instantiate a contract [`Address`] from a validated contract ID string.
+    pub fn from_contract_id(contract_id: &str) -> PrismResult<Self> {
+        Self::validate_contract_id(contract_id)?;
+        let contract = Contract::from_string(contract_id).map_err(|e| {
+            PrismError::InvalidAddress(format!("Invalid contract ID '{contract_id}': {e}"))
+        })?;
+
+        Ok(Self {
+            bytes: contract.0.to_vec(),
+            address_type: AddressType::Contract,
+        })
+    }
+
     /// Convert to strkey string.
     pub fn to_strkey(&self) -> String {
         match self.address_type {
@@ -104,11 +136,24 @@ impl From<Address> for String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stellar_strkey::ed25519::PrivateKey;
+
+    fn valid_account_strkey() -> String {
+        PublicKey([1; 32]).to_string()
+    }
+
+    fn valid_contract_strkey() -> String {
+        Contract([2; 32]).to_string()
+    }
+
+    fn valid_private_key_strkey() -> String {
+        PrivateKey([3; 32]).to_string()
+    }
 
     #[test]
     fn test_address_from_string_valid_account() {
-        let s = "GA5W327P3O6PDH4YCWYAW5M36DREB6ZRYNRFCTO7C6XU66OJSXR6X6R6";
-        let res = Address::from_string(s);
+        let s = valid_account_strkey();
+        let res = Address::from_string(&s);
         assert!(res.is_ok());
         let addr = res.unwrap();
         assert_eq!(addr.address_type, AddressType::Account);
@@ -117,8 +162,8 @@ mod tests {
 
     #[test]
     fn test_address_from_string_valid_contract() {
-        let s = "CA3D5YIF3S62FBE6SYO6ALSTCJR3Y3Y0V7SYCLTULV2S0S0S0S0S0S0S";
-        let res = Address::from_string(s);
+        let s = valid_contract_strkey();
+        let res = Address::from_string(&s);
         assert!(res.is_ok());
         let addr = res.unwrap();
         assert_eq!(addr.address_type, AddressType::Contract);
@@ -139,9 +184,8 @@ mod tests {
 
     #[test]
     fn test_address_from_string_unsupported() {
-        // Seed (starts with S)
-        let s = "SA5W327P3O6PDH4YCWYAW5M36DREB6ZRYNRFCTO7C6XU66OJSUSE4NNI";
-        let res = Address::from_string(s);
+        let s = valid_private_key_strkey();
+        let res = Address::from_string(&s);
         assert!(res.is_err());
         match res {
             Err(PrismError::InvalidAddress(msg)) => {
@@ -153,8 +197,11 @@ mod tests {
 
     #[test]
     fn test_address_from_string_corrupted_checksum() {
-        let s = "GA5W327P3O6PDH4YCWYAW5M36DREB6ZRYNRFCTO7C6XU66OJSXR6X6R7"; // Ending changed from R6 to R7
-        let res = Address::from_string(s);
+        let mut s = valid_account_strkey();
+        let last = s.pop().unwrap();
+        s.push(if last == 'A' { 'B' } else { 'A' });
+
+        let res = Address::from_string(&s);
         assert!(res.is_err());
         match res {
             Err(PrismError::InvalidAddress(msg)) => {
@@ -162,5 +209,51 @@ mod tests {
             }
             _ => panic!("Expected InvalidAddress error for corrupted checksum"),
         }
+    }
+
+    #[test]
+    fn test_validate_contract_id_valid() {
+        let s = valid_contract_strkey();
+        let res = Address::validate_contract_id(&s);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_validate_contract_id_wrong_prefix() {
+        let s = valid_account_strkey();
+        let res = Address::validate_contract_id(&s);
+        assert!(res.is_err());
+        match res {
+            Err(PrismError::InvalidAddress(msg)) => {
+                assert!(msg.contains("must start with 'C'"));
+            }
+            _ => panic!("Expected InvalidAddress error for wrong prefix"),
+        }
+    }
+
+    #[test]
+    fn test_validate_contract_id_malformed() {
+        let mut s = valid_contract_strkey();
+        let last = s.pop().unwrap();
+        s.push(if last == 'A' { 'B' } else { 'A' });
+
+        let res = Address::validate_contract_id(&s);
+        assert!(res.is_err());
+        match res {
+            Err(PrismError::InvalidAddress(msg)) => {
+                assert!(msg.contains("Invalid contract ID"));
+            }
+            _ => panic!("Expected InvalidAddress error for malformed contract id"),
+        }
+    }
+
+    #[test]
+    fn test_from_contract_id_valid() {
+        let s = valid_contract_strkey();
+        let res = Address::from_contract_id(&s);
+        assert!(res.is_ok());
+        let addr = res.unwrap();
+        assert_eq!(addr.address_type, AddressType::Contract);
+        assert_eq!(addr.to_strkey(), s);
     }
 }
